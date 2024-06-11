@@ -32,6 +32,8 @@ class Dense(Layer):
         if training:
             dropout_mask = cp.random.binomial(1, 1-self.dropout, size = x.shape)
             x = x * dropout_mask / (1-self.dropout)
+            
+        self.input = x
         x = cp.matmul(x, self.weight) + self.bias
         return x
 
