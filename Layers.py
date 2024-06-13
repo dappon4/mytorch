@@ -8,7 +8,7 @@ class Layer:
         
     def __call__(self, inp):
         x, prev = inp
-        if self.prev is None:
+        if not self.prev:
             self.prev = prev
         x = self.forward(x)
         
@@ -22,9 +22,13 @@ class Layer:
     
     def train(self):
         self.training = True
+        if self.prev:
+            self.prev.train()
     
     def eval(self):
         self.training = False
+        if self.prev:
+            self.prev.eval()
     
     def xavier_init(self, input_size, output_size):
         return cp.random.normal(0.0, cp.sqrt(2/(input_size + output_size)), (input_size, output_size))
@@ -36,10 +40,10 @@ class CompoundLayer(Layer):
     
     def __call__(self, inp):
         _, prev = inp
-        if self.prev is None:
+        if not self.prev:
             self.prev = prev
         x = self.forward(inp)
-        if self.final_layer is None:
+        if not self.final_layer:
             _, self.final_layer = x
         
         # x is (cp array, self)
@@ -49,20 +53,12 @@ class CompoundLayer(Layer):
         self.final_layer.backward(error)
     
     def train(self):
-        curr = self.final_layer
-        while curr:
-            curr.train()
-            curr = curr.prev
+        if self.final_layer:
+            self.final_layer.train()
     
     def eval(self):
-        curr = self.final_layer
-        while curr:
-            curr.eval()
-            curr = curr.prev
-
-    def initialize(self):
-        # TODO: Implement initialization
-        pass
+        if self.final_layer:
+            self.final_layer.eval()
     
     def predict(self, X):
         y_pred, _ = self((X,None))
@@ -97,6 +93,36 @@ class Linear(Layer):
         if self.prev:
             self.prev.backward(delta_error.transpose(0,2,1))
 
+class Residual(Layer):
+    def __init__(self):
+        super().__init__()
+        self.prev = []
+    
+    def __call__(self, inp1, inp2):
+        x1, prev1 = inp1
+        x2, prev2 = inp2
+        if not self.prev:
+            self.prev.append(prev1)
+            self.prev.append(prev2)
+        x = self.forward(x1, x2)
+        
+        return x, self
+    
+    def forward(self, x1, x2):
+        return x1 + x2
+    
+    def backward(self, error):
+        for prev in self.prev:
+            prev.backward(error)
+    
+    def train(self):
+        for prev in self.prev:
+            prev.train()
+    
+    def eval(self):
+        for prev in self.prev:
+            prev.eval()
+    
 class Relu(Layer):
     def __init__(self):
         super().__init__()
