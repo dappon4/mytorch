@@ -1,18 +1,22 @@
 from sklearn.datasets import fetch_openml
 from sklearn.model_selection import train_test_split
+from Functions import *
 import cupy as cp
 import numpy as np
 import pandas as pd
 import time
+import matplotlib.pyplot as plt
 
 cp.cuda.Device(0).use()
 
 class Trainer:
-    def __init__(self, batch, epochs, test_size, validation_size, dastaset="MNIST") -> None:
+    def __init__(self, batch, epochs, test_size, validation_size, loss_func ="mean_squared_error" ,dastaset="MNIST") -> None:
         self.batch = batch
         self.epochs = epochs
         self.test_size = test_size
         self.validation_size = validation_size
+        self.loss = None
+        self.loss_derivative = None
         self.train_losses = []
         self.validation_losses = []
         
@@ -20,6 +24,13 @@ class Trainer:
             self.load_MNIST()
         else:
             raise ValueError("Dataset not recognized")
+
+        if loss_func == "mean_squared_error":
+            self.loss = mean_squared_error
+            self.loss_derivative = mean_squared_error_derivative
+        elif loss_func == "cross_entropy":
+            self.loss = cross_entropy
+            self.loss_derivative = cross_entropy_derivative
     
     def load_MNIST(self):
         print("loading MNIST...")
@@ -38,7 +49,10 @@ class Trainer:
         self.X_train, self.X_test, self.y_train, self.y_test = train_test_split(data, target, test_size=self.test_size, random_state=42, stratify=np.argmax(cp.asnumpy(target), axis=-1))
         self.X_validation, self.X_test, self.y_validation, self.y_test = train_test_split(self.X_test, self.y_test, test_size=self.validation_size, random_state=42, stratify=np.argmax(cp.asnumpy(self.y_test), axis=-1))
         print("MNIST loaded")
-        
+    
+    def calculate_error(self, y_pred, y_true):
+        return self.loss_derivative(y_pred, y_true)
+    
     def train(self, network):
         print("training...")
 
@@ -52,16 +66,20 @@ class Trainer:
             train_loss = 0
             validation_loss = 0
             
+            network.train()
             for i in range(0, len(self.X_train), self.batch):
                 batch_X = self.X_train[i:i+self.batch]
                 batch_y = self.y_train[i:i+self.batch]
-                train_loss += network.fit(batch_X, batch_y)
+                y_pred = network.predict(batch_X)
+                train_loss += self.loss(y_pred, batch_y)
+                network.backward(self.calculate_error(y_pred, batch_y))
             
+            network.eval()
             for i in range(0, len(self.X_validation), self.batch):
                 batch_X = self.X_validation[i:i+self.batch]
                 batch_y = self.y_validation[i:i+self.batch]
                 y_pred = network.predict(batch_X)
-                validation_loss += network.loss(y_pred, batch_y)
+                validation_loss += self.loss(y_pred, batch_y)
             
             t2 = time.time()
             average_train_loss = train_loss / (len(self.X_train) // self.batch)
@@ -73,7 +91,6 @@ class Trainer:
             print(f'Epoch {epoch+1}/{self.epochs} Training Loss: {average_train_loss:.4f} Validation Loss: {average_validation_loss:.4f} Time: {t2-t1:.3f} seconds')
     
     def visualize_loss(self):
-        import matplotlib.pyplot as plt
         plt.plot(self.train_losses, label="Training Loss")
         plt.plot(self.validation_losses, label="Validation Loss")
         plt.legend()
@@ -82,6 +99,8 @@ class Trainer:
     def accuracy(self, network):
         batch = 100
         score = 0
+        
+        network.eval()
         
         for i in range(0, len(self.X_test), batch):
             X_batch = self.X_test[i:i+batch]

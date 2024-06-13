@@ -29,7 +29,7 @@ def relu_derivative(x):
 
 def mean_squared_error(y_pred, y_true):
     #print(np.mean(np.mean(np.power(y_pred - y_true,2),axis=-1)))
-    return np.mean(np.sum(np.power(y_pred - y_true,2),axis=-1))
+    return np.mean(np.sum(np.power(y_pred - y_true,2),axis=-1)).item()
 
 def mean_squared_error_derivative(y_pred, y_true):
     #print(np.mean(y_pred - y_true, axis = 0).shape)
