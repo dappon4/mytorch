@@ -10,7 +10,7 @@ class Layer:
         x, prev = inp
         if self.prev is None:
             self.prev = prev
-        x = self.forward(x, self.training)
+        x = self.forward(x)
         
         return x, self
     
@@ -38,7 +38,7 @@ class CompoundLayer(Layer):
         _, prev = inp
         if self.prev is None:
             self.prev = prev
-        x = self.forward(inp, self.training)
+        x = self.forward(inp)
         if self.final_layer is None:
             _, self.final_layer = x
         
@@ -77,9 +77,9 @@ class Linear(Layer):
         
         self.dropout = dropout
         
-    def forward(self, x, training=True):
+    def forward(self, x):
         # x is cp array
-        if training:
+        if self.training:
             dropout_mask = cp.random.binomial(1, 1-self.dropout, size = x.shape)
             x = x * dropout_mask / (1-self.dropout)
 
@@ -102,7 +102,7 @@ class Relu(Layer):
         super().__init__()
         self.input = None
     
-    def forward(self, x, training):
+    def forward(self, x):
         self.input = x
         return cp.maximum(x, 0)
 

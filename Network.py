@@ -13,7 +13,7 @@ class Network(CompoundLayer):
         self.relu2 = Relu()
         self.relu3 = Relu()
         
-    def forward(self, x, training=True):
+    def forward(self, x):
         # x is (cp array, prev layer instance)
         x = self.linear1(x)
         x = self.relu1(x)
@@ -25,7 +25,7 @@ class Network(CompoundLayer):
         return x
 
 if __name__ == "__main__":
-    trainer = Trainer(batch=128, epochs=20, test_size=0.2, validation_size=0.1, loss_func="cross_entropy")
+    trainer = Trainer(batch=128, epochs=20, test_size=0.2, validation_size=0.1, loss_func="cross_entropy", dastaset="MNIST")
 
     network = Network()
     #network = Network([784, 64, 32, 10],["sigmoid", "sigmoid", "sigmoid"],lr=0.01, loss_func="mean_squared_error")
