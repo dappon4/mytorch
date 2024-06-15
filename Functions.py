@@ -1,16 +1,5 @@
 import cupy as cp
-
-def identity(x):
-    return x
-
-def identity_derivative(x):
-    return x
-
-def sigmoid(x):
-    return 1/(1+cp.exp(-x))
-
-def sigmoid_derivative(x):
-    return x*(1-x)
+from cupy.lib.stride_tricks import sliding_window_view, as_strided
 
 def softmax(x):
     # shape of x: (batch_size, 1, output_size)
@@ -48,3 +37,36 @@ def he_init_conv2d(filter_shape):
     stddev = cp.sqrt(2.0 / fan_in) # standard deviation of normal distribution
 
     return cp.random.normal(loc=0, scale=stddev, size=filter_shape)
+
+def relu(x):
+    inp, prev = x
+    fil = cp.where(inp > 0, 1, 0)
+    prev.error_grad = fil
+    
+    return inp * fil, prev
+
+def sigmoid(x):
+    inp, prev = x
+    fil = 1/(1+cp.exp(-inp))
+    prev.error_grad = fil * (1 - fil)
+    
+    return fil, prev
+
+
+def sliding_window_view_with_strides(matrix, sub_shape, stride):
+    batch_size, in_channels, height, width = matrix.shape
+    sub_rows, sub_cols = sub_shape
+
+    # Calculate the shape and strides for the submatrices
+    out_height = (height - sub_rows) // stride[0] + 1
+    out_width = (width - sub_cols) // stride[1] + 1
+    shape = (batch_size, in_channels, out_height, out_width, sub_rows, sub_cols)
+    new_strides = (matrix.strides[0],matrix.strides[1],matrix.strides[2] * stride[0],matrix.strides[3] * stride[1],matrix.strides[2],matrix.strides[3])
+
+    sub_matrices = as_strided(matrix, shape=shape, strides=new_strides)
+    return sub_matrices
+
+if __name__ == "__main__":
+    x = cp.arange(2*3*4*4).reshape(2,3,4,4)
+    print(sliding_window_view_with_strides(x, (2,2), (2,2)))
+    print(sliding_window_view_with_strides(x, (2,2), (2,2)).shape)

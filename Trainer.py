@@ -10,7 +10,7 @@ import matplotlib.pyplot as plt
 cp.cuda.Device(0).use()
 
 class Trainer:
-    def __init__(self, batch, epochs, test_size, validation_size, loss_func ="mean_squared_error" ,dastaset="MNIST") -> None:
+    def __init__(self, batch, epochs, test_size, validation_size, loss_func ="mean_squared_error" ,dastaset="MNIST", flatten=True) -> None:
         self.batch = batch
         self.epochs = epochs
         self.test_size = test_size
@@ -21,7 +21,7 @@ class Trainer:
         self.validation_losses = []
         
         if dastaset == "MNIST":
-            self.load_MNIST()
+            self.load_MNIST(flatten)
         else:
             raise ValueError("Dataset not recognized")
 
@@ -32,19 +32,18 @@ class Trainer:
             self.loss = cross_entropy
             self.loss_derivative = cross_entropy_derivative
     
-    def load_MNIST(self):
+    def load_MNIST(self, flatten):
         print("loading MNIST...")
         digits = fetch_openml('mnist_784')
         
         target = pd.get_dummies(digits.target).astype(int)
-        target = target.to_numpy()
-        target = np.expand_dims(target, axis=1)
         target = cp.array(target)
-
-        data = digits.data.to_numpy()
+        
+        data = cp.array(digits.data)
         data = data / 255
-        data = np.expand_dims(data, axis=1)
-        data = cp.array(data)
+        if not flatten:
+            data = data.reshape(-1, 1, 28, 28)
+        
 
         self.X_train, self.X_test, self.y_train, self.y_test = train_test_split(data, target, test_size=self.test_size, random_state=42, stratify=np.argmax(cp.asnumpy(target), axis=-1))
         self.X_validation, self.X_test, self.y_validation, self.y_test = train_test_split(self.X_test, self.y_test, test_size=self.validation_size, random_state=42, stratify=np.argmax(cp.asnumpy(self.y_test), axis=-1))

@@ -1,41 +1,40 @@
 from Functions import *
-from Layers import CompoundLayer, Relu, Linear, Residual
+from Layers import CompoundLayer, Linear, Residual, Conv2d, MaxPool2d, Flatten
 from Trainer import Trainer
 
 class Network(CompoundLayer):
     def __init__(self) -> None:
         super().__init__()
-        self.linear1 = Linear(784, 128)
+        self.conv1 = Conv2d(1, 16, 3, 1, 1)
+        self.conv2 = Conv2d(16, 32, 3, 1, 1)
+        
+        self.pool1 = MaxPool2d(kernel_size=2, stride=2)
+        self.pool2 = MaxPool2d(kernel_size=2, stride=2)
+        
+        self.linear1 = Linear(32 * 7 * 7, 128)
         self.linear2 = Linear(128, 64)
-        self.linear3 = Linear(64, 128)
-        self.linear4 = Linear(128, 10)
+        self.linear3 = Linear(64, 10)
         
-        self.relu1 = Relu()
-        self.relu2 = Relu()
-        self.relu3 = Relu()
-        self.relu4 = Relu()
-        self.relu5 = Relu()
-        
-        self.res1 = Residual()
+        self.flatten = Flatten()
         
     def forward(self, x):
         # x is (cp array, prev layer instance)
-        x = self.linear1(x)
-        x = self.relu1(x)
-        x_res = x
-        x = self.linear2(x)
-        x = self.relu2(x)
-        x = self.linear3(x)
-        x = self.relu3(x)
-        x = self.res1(x, x_res)
-        x = self.relu4(x)
-        x = self.linear4(x)
-        x = self.relu5(x)
+        x = self.conv1(x)
+        x = self.pool1(x) # output shape: (batch_size, 16, 14, 14)
+        
+        x = self.conv2(x) # output shape: (batch_size, 32, 14, 14)
+        x = self.pool2(x) # output shape: (batch_size, 32, 7, 7)
+        
+        x = self.flatten(x)
+        
+        x = relu(self.linear1(x))
+        x = relu(self.linear2(x))
+        x = relu(self.linear3(x))
         
         return x
 
 if __name__ == "__main__":
-    trainer = Trainer(batch=128, epochs=20, test_size=0.2, validation_size=0.1, loss_func="cross_entropy", dastaset="MNIST")
+    trainer = Trainer(batch=128, epochs=10, test_size=0.2, validation_size=0.1, loss_func="cross_entropy", dastaset="MNIST", flatten = False)
 
     network = Network()
     #network = Network([784, 64, 32, 10],["sigmoid", "sigmoid", "sigmoid"],lr=0.01, loss_func="mean_squared_error")

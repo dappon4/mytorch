@@ -1,19 +1,21 @@
 from typing import Any
 from Functions import *
 import cupy as cp
-from cupy.lib.stride_tricks import sliding_window_view
+from cupy.lib.stride_tricks import sliding_window_view, as_strided
 import time
 
 class Layer:
     def __init__(self):
         self.prev = None
         self.training = True
+        self.error_grad = None
         
     def __call__(self, inp):
         x, prev = inp
         if not self.prev:
             self.prev = prev
         x = self.forward(x)
+        self.error_grad = cp.ones_like(x)
         
         return x, self
     
@@ -69,7 +71,7 @@ class Linear(Layer):
         super().__init__()
         self.lr = lr
         self.weight = xavier_init(input_size, output_size)
-        self.bias = cp.zeros((1, output_size))
+        self.bias = cp.zeros((output_size,))
         
         self.dropout = dropout
         
@@ -84,14 +86,16 @@ class Linear(Layer):
         return x
 
     def backward(self, error):
-        delta_weight = cp.matmul(self.input.transpose(0,2,1), error)
-        delta_error = cp.matmul(self.weight, error.transpose(0,2,1))
+        error = error * self.error_grad
+        
+        delta_weight = cp.matmul(self.input.T, error)
+        delta_error = cp.matmul(self.weight, error.T)
         
         self.weight -= self.lr * cp.mean(delta_weight, axis = 0)
         self.bias -= self.lr * cp.mean(error, axis=0)
         
         if self.prev:
-            self.prev.backward(delta_error.transpose(0,2,1))
+            self.prev.backward(delta_error.T)
 
 class Residual(Layer):
     def __init__(self):
@@ -112,6 +116,8 @@ class Residual(Layer):
         return x1 + x2
     
     def backward(self, error):
+        error = error * self.error_grad
+        
         for prev in self.prev:
             prev.backward(error)
     
@@ -146,24 +152,30 @@ class Conv2d(Layer):
         self.filter = he_init_conv2d((out_channels, in_channels, *self.kernel_size))
         self.bias = None
     
+    
     def forward(self, x):
         batch_size = x.shape[0]
-        if self.bias is None:
-            self.bias = cp.zeros((1, self.out_channels, int((x.shape[2] - self.kernel_size[0] + 2 * self.padding)/self.stride[0] + 1), int((x.shape[3] - self.kernel_size[1] + 2 * self.padding)/self.stride[1] + 1)))
+        output_height = (x.shape[2] - self.kernel_size[0] + 2 * self.padding)//self.stride[0] + 1
+        output_width = (x.shape[3] - self.kernel_size[1] + 2 * self.padding)//self.stride[1] + 1
         
-        out_height = int((x.shape[2] - self.kernel_size[0] + 2 * self.padding)/self.stride[0] + 1)
-        out_width = int((x.shape[3] - self.kernel_size[1] + 2 * self.padding)/self.stride[1] + 1)
+        if self.bias is None:
+            self.bias = cp.zeros((1, self.out_channels, output_height, output_width))
         
         self.padded_input = cp.pad(x, ((0,0), (0,0), (self.padding, self.padding), (self.padding, self.padding)))
-        sub_matrices = sliding_window_view(self.padded_input, (batch_size, self.in_channels, *self.kernel_size))
-        flattend = sub_matrices.reshape((-1, batch_size, self.in_channels, self.kernel_size[0]*self.kernel_size[1])).transpose(1,2,0,3)
+        #sub_matrices = sliding_window_view(self.padded_input, (batch_size, self.in_channels, *self.kernel_size))
+        sub_matrices_2 = sliding_window_view_with_strides(self.padded_input, self.kernel_size, self.stride)
+        flattend = sub_matrices_2.reshape(batch_size, self.in_channels, output_height*output_width, self.kernel_size[0]*self.kernel_size[1])
+        #flattend = sub_matrices.reshape((-1, batch_size, self.in_channels, self.kernel_size[0]*self.kernel_size[1])).transpose(1,2,0,3)
         
         # flattend is shape (batch_size, in_channels, out_height*out_width, kernel_size[0]*kernel_size[1])
         flattend_filter = self.filter.reshape((self.out_channels, self.in_channels, 1, self.kernel_size[0]*self.kernel_size[1]))
         
-        return cp.tensordot(flattend, flattend_filter, axes=([1,3], [1,3])).transpose(0,2,1,3).reshape(batch_size, self.out_channels, out_height, out_width) + self.bias
+        return cp.tensordot(flattend, flattend_filter, axes=([1,3], [1,3])).transpose(0,2,1,3).reshape(batch_size, self.out_channels, output_height, output_width) + self.bias
 
+    # TODO: optimize this
     def backward(self, error):
+        error = error * self.error_grad
+        
         # error is cp array of shape (batch_size, out_channels, new_height, new_width)
         batch_size = error.shape[0]
         
@@ -190,21 +202,30 @@ class MaxPool2d(Layer):
             self.kernel_size = (kernel_size, kernel_size)
         else:
             self.kernel_size = kernel_size
+        
+        if type(stride) == int:
+            self.stride = (stride, stride)
+        else:
+            self.stride = stride
     
     def forward(self,x):
         batch_size, channel_size = x.shape[:2]
         
-        output_height = int((x.shape[2] - self.kernel_size[0] + 2 * self.padding)/self.stride + 1)
-        output_width = int((x.shape[3] - self.kernel_size[1] + 2 * self.padding)/self.stride + 1)
+        output_height = (x.shape[2] - self.kernel_size[0] + 2 * self.padding)//self.stride[0] + 1
+        output_width = (x.shape[3] - self.kernel_size[1] + 2 * self.padding)//self.stride[1] + 1
         
         self.padded_input = cp.pad(x, ((0,0), (0,0), (self.padding, self.padding), (self.padding, self.padding)), mode="constant", constant_values = -10000)
-        sub_matrices = sliding_window_view(self.padded_input, (batch_size, channel_size, *self.kernel_size))
-        self.flattened = sub_matrices.reshape((-1, batch_size, channel_size, self.kernel_size[0]*self.kernel_size[1])).transpose(1,2,0,3)
+        #sub_matrices = sliding_window_view(self.padded_input, (batch_size, channel_size, *self.kernel_size))
+        #self.flattened = sub_matrices.reshape((-1, batch_size, channel_size, self.kernel_size[0]*self.kernel_size[1])).transpose(1,2,0,3)
+        sub_matrices_2 = sliding_window_view_with_strides(self.padded_input, self.kernel_size, self.stride)
+        self.flattened = sub_matrices_2.reshape(batch_size, channel_size, output_height*output_width, self.kernel_size[0]*self.kernel_size[1])
         
         return cp.max(self.flattened, axis = -1).reshape(batch_size, channel_size, output_height, output_width)
         
     
     def backward(self, error):
+        error = error * self.error_grad
+        
         delta_error = cp.zeros(self.padded_input.shape)
         
         batch_size = error.shape[0]
@@ -227,21 +248,22 @@ class MaxPool2d(Layer):
         
         return delta_error[:,:,self.padding:-self.padding,self.padding:-self.padding]
 
-# TODO: Implement Flatten
-# TODO: IMplement BatchNorm2d
-
-class Relu(Layer):
+class Flatten(Layer):
     def __init__(self):
         super().__init__()
-        self.input = None
     
     def forward(self, x):
-        self.input = x
-        return cp.maximum(x, 0)
-
+        self.input_shape = x.shape
+        
+        # reshape to (batch_size, channel_size * height * width)
+        return x.reshape(x.shape[0], -1)
+    
     def backward(self, error):
-        if self.prev:
-            self.prev.backward(error * cp.where(self.input > 0, 1, 0))
+        error = error * self.error_grad
+        
+        return error.reshape(self.input_shape)
+
+# TODO: IMplement BatchNorm2d
 
 if __name__ == "__main__":
     network = MaxPool2d(kernel_size=(2,2), padding = 1)
