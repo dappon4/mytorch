@@ -10,9 +10,10 @@ import matplotlib.pyplot as plt
 cp.cuda.Device(0).use()
 
 class Trainer:
-    def __init__(self, batch, epochs, test_size, validation_size, loss_func ="mean_squared_error" ,dastaset="MNIST", flatten=True) -> None:
+    def __init__(self, batch, epochs, lr, test_size, validation_size, loss_func ="mean_squared_error" ,dastaset="MNIST", flatten=True) -> None:
         self.batch = batch
         self.epochs = epochs
+        self.lr = lr
         self.test_size = test_size
         self.validation_size = validation_size
         self.loss = None
@@ -71,7 +72,7 @@ class Trainer:
                 batch_y = self.y_train[i:i+self.batch]
                 y_pred = network.predict(batch_X)
                 train_loss += self.loss(y_pred, batch_y)
-                network.backward(self.calculate_error(y_pred, batch_y))
+                network.backward(self.calculate_error(y_pred, batch_y), self.lr)
             
             network.eval()
             for i in range(0, len(self.X_validation), self.batch):

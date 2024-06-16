@@ -22,7 +22,7 @@ class Layer:
     def forward(self, x):
         raise NotImplementedError
 
-    def backward(self, x):
+    def backward(self, error, lr):
         raise NotImplementedError
     
     def train(self):
@@ -36,6 +36,7 @@ class Layer:
             self.prev.eval()
 
 class CompoundLayer(Layer):
+    # TODO: connect the previous layer to the first layer
     def __init__(self):
         super().__init__()
         self.final_layer = None
@@ -51,8 +52,8 @@ class CompoundLayer(Layer):
         # x is (cp array, self)
         return x
     
-    def backward(self, error):
-        self.final_layer.backward(error)
+    def backward(self, error, lr):
+        self.final_layer.backward(error, lr)
     
     def train(self):
         if self.final_layer:
@@ -67,9 +68,8 @@ class CompoundLayer(Layer):
         return y_pred
     
 class Linear(Layer):
-    def __init__(self, input_size, output_size, lr = 0.005, dropout=0.0):
+    def __init__(self, input_size, output_size, dropout=0.0):
         super().__init__()
-        self.lr = lr
         self.weight = xavier_init(input_size, output_size)
         self.bias = cp.zeros((output_size,))
         
@@ -85,17 +85,17 @@ class Linear(Layer):
         x = cp.matmul(x, self.weight) + self.bias
         return x
 
-    def backward(self, error):
+    def backward(self, error, lr):
         error = error * self.error_grad
         
         delta_weight = cp.matmul(self.input.T, error)
         delta_error = cp.matmul(self.weight, error.T)
         
-        self.weight -= self.lr * cp.mean(delta_weight, axis = 0)
-        self.bias -= self.lr * cp.mean(error, axis=0)
+        self.weight -= lr * cp.mean(delta_weight, axis = 0)
+        self.bias -= lr * cp.mean(error, axis=0)
         
         if self.prev:
-            self.prev.backward(delta_error.T)
+            self.prev.backward(delta_error.T, lr)
 
 class Residual(Layer):
     def __init__(self):
@@ -115,11 +115,11 @@ class Residual(Layer):
     def forward(self, x1, x2):
         return x1 + x2
     
-    def backward(self, error):
+    def backward(self, error, lr):
         error = error * self.error_grad
         
         for prev in self.prev:
-            prev.backward(error)
+            prev.backward(error, lr)
     
     def train(self):
         for prev in self.prev:
@@ -130,7 +130,7 @@ class Residual(Layer):
             prev.eval()
 
 class Conv2d(Layer):
-    def __init__(self, in_channels, out_channels, kernel_size, stride=1, padding=0, lr=0.005):
+    def __init__(self, in_channels, out_channels, kernel_size, stride=1, padding=0):
         super().__init__()
         
         self.in_channels = in_channels
@@ -147,7 +147,6 @@ class Conv2d(Layer):
             self.stride = stride
 
         self.padding = padding
-        self.lr = lr
         
         self.filter = he_init_conv2d((out_channels, in_channels, *self.kernel_size))
         self.bias = None
@@ -163,8 +162,8 @@ class Conv2d(Layer):
         
         self.padded_input = cp.pad(x, ((0,0), (0,0), (self.padding, self.padding), (self.padding, self.padding)))
         #sub_matrices = sliding_window_view(self.padded_input, (batch_size, self.in_channels, *self.kernel_size))
-        sub_matrices_2 = sliding_window_view_with_strides(self.padded_input, self.kernel_size, self.stride)
-        flattend = sub_matrices_2.reshape(batch_size, self.in_channels, output_height*output_width, self.kernel_size[0]*self.kernel_size[1])
+        sub_matrices = sliding_window_view_with_strides(self.padded_input, self.kernel_size, self.stride)
+        flattend = sub_matrices.reshape(batch_size, self.in_channels, output_height*output_width, self.kernel_size[0]*self.kernel_size[1])
         #flattend = sub_matrices.reshape((-1, batch_size, self.in_channels, self.kernel_size[0]*self.kernel_size[1])).transpose(1,2,0,3)
         
         # flattend is shape (batch_size, in_channels, out_height*out_width, kernel_size[0]*kernel_size[1])
@@ -173,7 +172,7 @@ class Conv2d(Layer):
         return cp.tensordot(flattend, flattend_filter, axes=([1,3], [1,3])).transpose(0,2,1,3).reshape(batch_size, self.out_channels, output_height, output_width) + self.bias
 
     # TODO: optimize this
-    def backward(self, error):
+    def backward(self, error, lr):
         error = error * self.error_grad
         
         # error is cp array of shape (batch_size, out_channels, new_height, new_width)
@@ -187,10 +186,28 @@ class Conv2d(Layer):
                 delta_filter += error[:,:,j,k].reshape(batch_size,self.out_channels,1,1,1) * self.padded_input[:,:,j*self.stride[0]:j*self.stride[0]+self.kernel_size[0], k*self.stride[1]:k*self.stride[1]+self.kernel_size[1]].reshape(batch_size,1,self.in_channels,self.kernel_size[0],self.kernel_size[1])
                 delta_error[:,:,j*self.stride[0]:j*self.stride[0]+self.kernel_size[0],k*self.stride[1]:k*self.stride[1]+self.kernel_size[1]] += cp.sum(error[:,:,j,k].reshape(batch_size, self.out_channels,1,1,1) * self.filter, axis=1)
     
-        self.filter -= self.lr * cp.mean(delta_filter, axis=0)
-        self.bias -= self.lr * cp.mean(error, axis=0)
+        self.filter -= lr * cp.mean(delta_filter, axis=0)
+        self.bias -= lr * cp.mean(error, axis=0)
         
-        return delta_error[:,:,self.padding:-self.padding,self.padding:-self.padding]
+        if self.padding > 0:
+            delta_error = delta_error[:,:,self.padding:-self.padding,self.padding:-self.padding]
+        
+        if self.prev:
+            self.prev.backward(delta_error, lr)
+    
+    def new_backward(self, error, lr):
+        error = error * self.error_grad
+        
+        # error is cp array of shape (batch_size, out_channels, new_height, new_width)
+        batch_size = self.padded_input.shape[0]
+        channel_size = self.padded_input.shape[1]
+        
+        error_size = error.shape[2] * error.shape[3]
+        
+        input_sub_matrices = sliding_window_view_with_strides(self.padded_input, self.kernel_size, self.stride).reshape(batch_size, channel_size, -1, self.kernel_size[0], self.kernel_size[1])
+        flattened_error = error.reshape(batch_size, error.size[1], -1, 1).repeat(self.kernel_size[0]*self.kernel_size[1], axis = -1).reshape(batch_size, error.size[1], -1, self.kernel_size[0],self.kernel_size[1])
+        delta_filter_flattened = input_sub_matrices * flattened_error
+        
 
 class MaxPool2d(Layer):
     def __init__(self,kernel_size, stride=1, padding=0):
@@ -223,7 +240,7 @@ class MaxPool2d(Layer):
         return cp.max(self.flattened, axis = -1).reshape(batch_size, channel_size, output_height, output_width)
         
     
-    def backward(self, error):
+    def backward(self, error, lr):
         error = error * self.error_grad
         
         delta_error = cp.zeros(self.padded_input.shape)
@@ -244,9 +261,13 @@ class MaxPool2d(Layer):
         
         for i in range(0, error_height):
             for j in range(0, error_width):
-                delta_error[:,:,i*self.stride:i*self.stride+self.kernel_size[0],j*self.stride:j*self.stride+self.kernel_size[1]] += cp.sum(sub_matrix_error[:,:,i,j])
+                delta_error[:,:,i*self.stride[0]:i*self.stride[0]+self.kernel_size[0],j*self.stride[1]:j*self.stride[1]+self.kernel_size[1]] += cp.sum(sub_matrix_error[:,:,i,j])
         
-        return delta_error[:,:,self.padding:-self.padding,self.padding:-self.padding]
+        if self.padding > 0:
+            delta_error = delta_error[:,:,self.padding:-self.padding,self.padding:-self.padding]
+        
+        if self.prev:
+            self.prev.backward(delta_error, lr)
 
 class Flatten(Layer):
     def __init__(self):
@@ -258,12 +279,12 @@ class Flatten(Layer):
         # reshape to (batch_size, channel_size * height * width)
         return x.reshape(x.shape[0], -1)
     
-    def backward(self, error):
+    def backward(self, error, lr):
         error = error * self.error_grad
-        
-        return error.reshape(self.input_shape)
+        if self.prev:
+            self.prev.backward(error.reshape(self.input_shape), lr)
 
-# TODO: IMplement BatchNorm2d
+# TODO: Implement BatchNorm2d
 
 if __name__ == "__main__":
     network = MaxPool2d(kernel_size=(2,2), padding = 1)

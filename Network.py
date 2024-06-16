@@ -34,7 +34,7 @@ class Network(CompoundLayer):
         return x
 
 if __name__ == "__main__":
-    trainer = Trainer(batch=128, epochs=10, test_size=0.2, validation_size=0.1, loss_func="cross_entropy", dastaset="MNIST", flatten = False)
+    trainer = Trainer(batch=128, epochs=10, lr = 0.005, test_size=0.2, validation_size=0.1, loss_func="cross_entropy", dastaset="MNIST", flatten = False)
 
     network = Network()
     #network = Network([784, 64, 32, 10],["sigmoid", "sigmoid", "sigmoid"],lr=0.01, loss_func="mean_squared_error")

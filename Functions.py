@@ -67,6 +67,9 @@ def sliding_window_view_with_strides(matrix, sub_shape, stride):
     return sub_matrices
 
 if __name__ == "__main__":
-    x = cp.arange(2*3*4*4).reshape(2,3,4,4)
-    print(sliding_window_view_with_strides(x, (2,2), (2,2)))
-    print(sliding_window_view_with_strides(x, (2,2), (2,2)).shape)
+    x = cp.zeros((2,3,4,4))
+    y = sliding_window_view_with_strides(x, (2,2), (2,2))
+    z = cp.ones(y.shape)
+    y += z
+    print(x)
+    print(y.shape)
