@@ -22,8 +22,15 @@ class Layer:
     def forward(self, x):
         raise NotImplementedError
 
-    def backward(self, error, lr):
+    def backward_calc(self, error, lr):
         raise NotImplementedError
+    
+    def backward(self, error, lr):
+        delta_error = self.backward_calc(error, lr)
+        if self.prev:
+            self.prev.backward(delta_error, lr)
+        else:
+            return delta_error
     
     def train(self):
         self.training = True
@@ -52,8 +59,8 @@ class CompoundLayer(Layer):
         # x is (cp array, self)
         return x
     
-    def backward(self, error, lr):
-        self.final_layer.backward(error, lr)
+    def backward_calc(self, error, lr):
+        return self.final_layer.backward(error, lr)
     
     def train(self):
         if self.final_layer:
@@ -85,7 +92,7 @@ class Linear(Layer):
         x = cp.matmul(x, self.weight) + self.bias
         return x
 
-    def backward(self, error, lr):
+    def backward_calc(self, error, lr):
         error = error * self.error_grad
         
         delta_weight = cp.matmul(self.input.T, error)
@@ -94,9 +101,8 @@ class Linear(Layer):
         self.weight -= lr * cp.mean(delta_weight, axis = 0)
         self.bias -= lr * cp.mean(error, axis=0)
         
-        if self.prev:
-            self.prev.backward(delta_error.T, lr)
-
+        return delta_error.T
+    
 class Residual(Layer):
     def __init__(self):
         super().__init__()
@@ -115,12 +121,17 @@ class Residual(Layer):
     def forward(self, x1, x2):
         return x1 + x2
     
-    def backward(self, error, lr):
-        error = error * self.error_grad
-        
-        for prev in self.prev:
-            prev.backward(error, lr)
+    def backward_calc(self, error, lr):
+        return error * self.error_grad
     
+    def backward(self, error, lr):
+        delta_error = self.backward_calc(error, lr)
+        if self.prev:
+            for prev in self.prev:
+                prev.backward(delta_error, lr)
+        else:
+            return delta_error
+        
     def train(self):
         for prev in self.prev:
             prev.train()
@@ -172,7 +183,7 @@ class Conv2d(Layer):
         return cp.tensordot(flattend, flattend_filter, axes=([1,3], [1,3])).transpose(0,2,1,3).reshape(batch_size, self.out_channels, output_height, output_width) + self.bias
 
     # TODO: optimize this
-    def backward(self, error, lr):
+    def backward_calc(self, error, lr):
         error = error * self.error_grad
         
         # error is cp array of shape (batch_size, out_channels, new_height, new_width)
@@ -192,8 +203,7 @@ class Conv2d(Layer):
         if self.padding > 0:
             delta_error = delta_error[:,:,self.padding:-self.padding,self.padding:-self.padding]
         
-        if self.prev:
-            self.prev.backward(delta_error, lr)
+        return delta_error
     
     def new_backward(self, error, lr):
         error = error * self.error_grad
@@ -240,7 +250,7 @@ class MaxPool2d(Layer):
         return cp.max(self.flattened, axis = -1).reshape(batch_size, channel_size, output_height, output_width)
         
     
-    def backward(self, error, lr):
+    def backward_calc(self, error, lr):
         error = error * self.error_grad
         
         delta_error = cp.zeros(self.padded_input.shape)
@@ -265,9 +275,6 @@ class MaxPool2d(Layer):
         
         if self.padding > 0:
             delta_error = delta_error[:,:,self.padding:-self.padding,self.padding:-self.padding]
-        
-        if self.prev:
-            self.prev.backward(delta_error, lr)
 
 class Flatten(Layer):
     def __init__(self):
@@ -279,10 +286,10 @@ class Flatten(Layer):
         # reshape to (batch_size, channel_size * height * width)
         return x.reshape(x.shape[0], -1)
     
-    def backward(self, error, lr):
+    def backward_calc(self, error, lr):
         error = error * self.error_grad
-        if self.prev:
-            self.prev.backward(error.reshape(self.input_shape), lr)
+        
+        return error.reshape(self.input_shape)
 
 # TODO: Implement BatchNorm2d
 
