@@ -94,9 +94,12 @@ class Linear(Layer):
 
     def backward_calc(self, error, lr):
         error = error * self.error_grad
-        
-        delta_weight = cp.matmul(self.input.T, error)
+        #print(self.input.shape, error.shape)
+        delta_weight = cp.einsum("ij,ik->ijk", self.input, error)
+        #print(delta_weight.shape)
         delta_error = cp.matmul(self.weight, error.T)
+        
+        #print(delta_error.shape)
         
         self.weight -= lr * cp.mean(delta_weight, axis = 0)
         self.bias -= lr * cp.mean(error, axis=0)
@@ -184,6 +187,7 @@ class Conv2d(Layer):
 
     # TODO: optimize this
     def backward_calc(self, error, lr):
+        
         error = error * self.error_grad
         
         # error is cp array of shape (batch_size, out_channels, new_height, new_width)
@@ -275,6 +279,8 @@ class MaxPool2d(Layer):
         
         if self.padding > 0:
             delta_error = delta_error[:,:,self.padding:-self.padding,self.padding:-self.padding]
+        
+        return delta_error
 
 class Flatten(Layer):
     def __init__(self):
