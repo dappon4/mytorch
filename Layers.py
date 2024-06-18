@@ -89,6 +89,7 @@ class Linear(Layer):
             x = x * dropout_mask / (1-self.dropout)
 
         self.input = x
+        #print(x.shape, self.weight.shape, self.bias.shape)
         x = cp.matmul(x, self.weight) + self.bias
         return x
 
@@ -167,6 +168,7 @@ class Conv2d(Layer):
     
     
     def forward(self, x):
+        # output size: [(W−K+2P)/S]+1
         batch_size = x.shape[0]
         output_height = (x.shape[2] - self.kernel_size[0] + 2 * self.padding)//self.stride[0] + 1
         output_width = (x.shape[3] - self.kernel_size[1] + 2 * self.padding)//self.stride[1] + 1
@@ -200,7 +202,8 @@ class Conv2d(Layer):
             for k in range(0, error.shape[3]): # width dimension
                 delta_filter += error[:,:,j,k].reshape(batch_size,self.out_channels,1,1,1) * self.padded_input[:,:,j*self.stride[0]:j*self.stride[0]+self.kernel_size[0], k*self.stride[1]:k*self.stride[1]+self.kernel_size[1]].reshape(batch_size,1,self.in_channels,self.kernel_size[0],self.kernel_size[1])
                 delta_error[:,:,j*self.stride[0]:j*self.stride[0]+self.kernel_size[0],k*self.stride[1]:k*self.stride[1]+self.kernel_size[1]] += cp.sum(error[:,:,j,k].reshape(batch_size, self.out_channels,1,1,1) * self.filter, axis=1)
-    
+        #print(delta_error)
+        
         self.filter -= lr * cp.mean(delta_filter, axis=0)
         self.bias -= lr * cp.mean(error, axis=0)
         
@@ -268,14 +271,18 @@ class MaxPool2d(Layer):
         max_values = cp.expand_dims(max_values, axis = -1)
         bool_matrix = (self.flattened == max_values).astype(int)
         
+        #print(bool_matrix)
+        
         flattend_error = error.reshape(batch_size, channel_size, -1,1)
         sub_matrix_error = bool_matrix * flattend_error
         
-        sub_matrix_error = sub_matrix_error.reshape(batch_size, channel_size, error_height, error_width, self.kernel_size[0], self.kernel_size[1])
         
+        
+        sub_matrix_error = sub_matrix_error.reshape(batch_size, channel_size, error_height, error_width, self.kernel_size[0], self.kernel_size[1])
+        #print(sub_matrix_error)
         for i in range(0, error_height):
             for j in range(0, error_width):
-                delta_error[:,:,i*self.stride[0]:i*self.stride[0]+self.kernel_size[0],j*self.stride[1]:j*self.stride[1]+self.kernel_size[1]] += cp.sum(sub_matrix_error[:,:,i,j])
+                delta_error[:,:,i*self.stride[0]:i*self.stride[0]+self.kernel_size[0],j*self.stride[1]:j*self.stride[1]+self.kernel_size[1]] += sub_matrix_error[:,:,i,j]
         
         if self.padding > 0:
             delta_error = delta_error[:,:,self.padding:-self.padding,self.padding:-self.padding]
@@ -300,15 +307,10 @@ class Flatten(Layer):
 # TODO: Implement BatchNorm2d
 
 if __name__ == "__main__":
-    network = MaxPool2d(kernel_size=(2,2), padding = 1)
-    x = cp.arange(32*5*2*2).reshape(32,5,2,2)
-    print(x)
-    
-    y = network.forward(x)
-    t1 = time.time()
-    z = network.backward(y)
-    t2 = time.time()
-    print(t2-t1)
-    #print(z.shape)
-    #print(y)
-    print(z.shape)
+    network = MaxPool2d(kernel_size=(2,2),stride=1)
+    x = cp.arange(2*2*3*3).reshape(2,2,3,3)
+    #error = cp.array([[[[1,0],[0,1]],[[1,0],[0,1]],[[1,0],[0,1]]],[[[1,0],[0,1]],[[1,0],[0,1]],[[1,0],[0,1]]]])
+    error = cp.arange(2*2*2*2).reshape(2,2,2,2)
+    network((x,None))
+    #print(network.error_grad.shape)
+    print(network.backward_calc(error, 0.01))
