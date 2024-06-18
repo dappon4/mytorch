@@ -10,7 +10,7 @@ import matplotlib.pyplot as plt
 cp.cuda.Device(0).use()
 
 class Trainer:
-    def __init__(self, batch, epochs, lr, test_size, validation_size, loss_func ="mean_squared_error" ,dastaset="MNIST", flatten=True) -> None:
+    def __init__(self, X, y, batch, epochs, lr, test_size, validation_size, loss_func ="mean_squared_error") -> None:
         self.batch = batch
         self.epochs = epochs
         self.lr = lr
@@ -20,35 +20,18 @@ class Trainer:
         self.loss_derivative = None
         self.train_losses = []
         self.validation_losses = []
-        
-        if dastaset == "MNIST":
-            self.load_MNIST(flatten)
-        else:
-            raise ValueError("Dataset not recognized")
 
+        self.X_train, self.X_test, self.y_train, self.y_test = train_test_split(X, y, test_size=self.test_size, random_state=42, stratify=np.argmax(cp.asnumpy(y), axis=-1))
+        self.X_validation, self.X_test, self.y_validation, self.y_test = train_test_split(self.X_test, self.y_test, test_size=self.validation_size, random_state=42, stratify=np.argmax(cp.asnumpy(self.y_test), axis=-1))
+        
         if loss_func == "mean_squared_error":
             self.loss = mean_squared_error
             self.loss_derivative = mean_squared_error_derivative
         elif loss_func == "cross_entropy":
             self.loss = cross_entropy
             self.loss_derivative = cross_entropy_derivative
-    
-    def load_MNIST(self, flatten):
-        print("loading MNIST...")
-        digits = fetch_openml('mnist_784')
-        
-        target = pd.get_dummies(digits.target).astype(int)
-        target = cp.array(target)
-        
-        data = cp.array(digits.data)
-        data = data / 255
-        if not flatten:
-            data = data.reshape(-1, 1, 28, 28)
-        
-
-        self.X_train, self.X_test, self.y_train, self.y_test = train_test_split(data, target, test_size=self.test_size, random_state=42, stratify=np.argmax(cp.asnumpy(target), axis=-1))
-        self.X_validation, self.X_test, self.y_validation, self.y_test = train_test_split(self.X_test, self.y_test, test_size=self.validation_size, random_state=42, stratify=np.argmax(cp.asnumpy(self.y_test), axis=-1))
-        print("MNIST loaded")
+        else:
+            raise ValueError("Loss function not supported")
     
     def calculate_error(self, y_pred, y_true):
         return self.loss_derivative(y_pred, y_true)
@@ -111,4 +94,19 @@ class Trainer:
         
         print(f"Accuracy: {score / len(self.X_test) * 100:.2f}%")
 
-        
+def load_mnist(flatten=True):
+    print("loading MNIST...")
+    digits = fetch_openml('mnist_784')
+    
+    data = cp.array(digits.data)
+    data = data / 255
+    
+    target = pd.get_dummies(digits.target).astype(int)
+    target = cp.array(target)
+
+    if not flatten:
+        data = data.reshape(-1, 1, 28, 28)
+    
+    print("MNIST loaded")
+    return data, target
+    
