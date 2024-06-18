@@ -119,6 +119,7 @@ class Residual(Layer):
             self.prev.append(prev1)
             self.prev.append(prev2)
         x = self.forward(x1, x2)
+        self.error_grad = cp.ones_like(x)
         
         return x, self
     
@@ -143,6 +144,50 @@ class Residual(Layer):
     def eval(self):
         for prev in self.prev:
             prev.eval()
+            
+class MatMul(Layer):
+    def __init__(self):
+        super().__init__()
+        self.x1 = None
+        self.x2 = None
+        self.prev = {}
+    
+    def __call__(self, inp1, inp2):
+        self.x1, prev1 = inp1
+        self.x2, prev2 = inp2
+        if not self.prev:
+            if prev1:
+                self.prev[x1] = [prev1]
+            if prev2:
+                self.prev[x2] = [prev2]
+        x = self.forward(self.x1, self.x2)
+        self.error_grad = cp.ones_like(x)
+        
+        return x, self
+    
+    def forward(self, x1, x2):
+        # assume each shape is length 3
+        return cp.einsum("ijk,ikl->ijl", x1, x2)
+
+    def backward_calc(self, error, lr):
+        error = error * self.error_grad
+        
+        
+        delta_error1 = cp.einsum("ijk,ilk->ijl",error, self.x2)
+        delta_error2 = cp.einsum("ijk,ijl->ikl", self.x1, error)
+        #print(delta_error1)
+        return delta_error1, delta_error2
+    
+    def backward(self, error, lr):
+        delta_error1, delta_error2 = self.backward_calc(error, lr)
+        if self.prev:
+            if self.prev[x1]:
+                self.prev[x1].backward(delta_error1, lr)
+            if self.prev[x2]:
+                self.prev[x2].backward(delta_error2, lr)
+        else:
+            return delta_error1, delta_error2
+        
 
 class Conv2d(Layer):
     def __init__(self, in_channels, out_channels, kernel_size, stride=1, padding=0):
@@ -307,10 +352,12 @@ class Flatten(Layer):
 # TODO: Implement BatchNorm2d
 
 if __name__ == "__main__":
-    network = MaxPool2d(kernel_size=(2,2),stride=1)
-    x = cp.arange(2*2*3*3).reshape(2,2,3,3)
+    network = MatMul()
+    x1 = cp.arange(5*3*4).reshape(5,3,4)
+    x2 = cp.arange(5*4*2).reshape(5,4,2)
     #error = cp.array([[[[1,0],[0,1]],[[1,0],[0,1]],[[1,0],[0,1]]],[[[1,0],[0,1]],[[1,0],[0,1]],[[1,0],[0,1]]]])
-    error = cp.arange(2*2*2*2).reshape(2,2,2,2)
-    network((x,None))
+    error = cp.arange(5*3*2).reshape(5,3,2)
+    network((x1,None),(x2,None))
     #print(network.error_grad.shape)
-    print(network.backward_calc(error, 0.01))
+    ret1, ret2 = network.backward(error, 0.01)
+    print(ret2)
