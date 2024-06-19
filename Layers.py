@@ -1,23 +1,25 @@
 from typing import Any
 from Functions import *
+from Tensor import Tensor
 import cupy as cp
 from cupy.lib.stride_tricks import sliding_window_view, as_strided
 import time
 
 class Layer:
     def __init__(self):
-        self.prev = None
+        self.prev = set()
         self.training = True
-        self.error_grad = None
         
-    def __call__(self, inp):
-        x, prev = inp
-        if not self.prev:
-            self.prev = prev
-        x = self.forward(x)
-        self.error_grad = cp.ones_like(x)
+        # TODO: initialize error_grad properly
+        self.error_grad = lambda x: x
         
-        return x, self
+    def __call__(self, tensor):
+        self.error_grad = lambda x: x
+        self.prev = tensor.prev
+        
+        tensor = Tensor(self.forward(tensor.tensor), {self})
+        
+        return tensor
     
     def forward(self, x):
         raise NotImplementedError
@@ -26,53 +28,58 @@ class Layer:
         raise NotImplementedError
     
     def backward(self, error, lr):
+        # TODO: account for multiple previous layers
         delta_error = self.backward_calc(error, lr)
+        
         if self.prev:
-            self.prev.backward(delta_error, lr)
+            for prev in self.prev:
+                prev.backward(delta_error, lr)
         else:
             return delta_error
     
     def train(self):
         self.training = True
-        if self.prev:
-            self.prev.train()
+        for prev in self.prev:
+            prev.train()
     
     def eval(self):
         self.training = False
-        if self.prev:
-            self.prev.eval()
+        for prev in self.prev:
+            prev.eval()
+    
+    def predict(self, X):
+        res = self(Tensor(X)).tensor
+        return res
 
 class CompoundLayer(Layer):
     # TODO: connect the previous layer to the first layer
     def __init__(self):
         super().__init__()
-        self.final_layer = None
+        self.final_layer = set()
     
-    def __call__(self, inp):
-        _, prev = inp
-        if not self.prev:
-            self.prev = prev
-        x = self.forward(inp)
-        if not self.final_layer:
-            _, self.final_layer = x
+    def __call__(self, tensor):
+        self.error_grad = lambda x: x
+        self.prev = tensor.prev
+            
+        tensor = self.forward(tensor)
+        self.final_layer = tensor.prev
         
-        # x is (cp array, self)
-        return x
+        return tensor
     
     def backward_calc(self, error, lr):
-        return self.final_layer.backward(error, lr)
+        # TODO: account for multiple final layers
+        for layer in self.final_layer:
+            error = layer.backward_calc(error, lr)
+        
+        return error
     
     def train(self):
-        if self.final_layer:
-            self.final_layer.train()
+        for layer in self.final_layer:
+            layer.train()
     
     def eval(self):
-        if self.final_layer:
-            self.final_layer.eval()
-    
-    def predict(self, X):
-        y_pred, _ = self((X,None))
-        return y_pred
+        for layer in self.final_layer:
+            layer.eval()
     
 class Linear(Layer):
     def __init__(self, input_size, output_size, dropout=0.0):
@@ -94,7 +101,7 @@ class Linear(Layer):
         return x
 
     def backward_calc(self, error, lr):
-        error = error * self.error_grad
+        error = self.error_grad(error)
         #print(self.input.shape, error.shape)
         delta_weight = cp.einsum("ij,ik->ijk", self.input, error)
         #print(delta_weight.shape)
@@ -105,89 +112,7 @@ class Linear(Layer):
         self.weight -= lr * cp.mean(delta_weight, axis = 0)
         self.bias -= lr * cp.mean(error, axis=0)
         
-        return delta_error.T
-    
-class Residual(Layer):
-    def __init__(self):
-        super().__init__()
-        self.prev = []
-    
-    def __call__(self, inp1, inp2):
-        x1, prev1 = inp1
-        x2, prev2 = inp2
-        if not self.prev:
-            self.prev.append(prev1)
-            self.prev.append(prev2)
-        x = self.forward(x1, x2)
-        self.error_grad = cp.ones_like(x)
-        
-        return x, self
-    
-    def forward(self, x1, x2):
-        return x1 + x2
-    
-    def backward_calc(self, error, lr):
-        return error * self.error_grad
-    
-    def backward(self, error, lr):
-        delta_error = self.backward_calc(error, lr)
-        if self.prev:
-            for prev in self.prev:
-                prev.backward(delta_error, lr)
-        else:
-            return delta_error
-        
-    def train(self):
-        for prev in self.prev:
-            prev.train()
-    
-    def eval(self):
-        for prev in self.prev:
-            prev.eval()
-            
-class MatMul(Layer):
-    def __init__(self):
-        super().__init__()
-        self.x1 = None
-        self.x2 = None
-        self.prev = {}
-    
-    def __call__(self, inp1, inp2):
-        self.x1, prev1 = inp1
-        self.x2, prev2 = inp2
-        if not self.prev:
-            if prev1:
-                self.prev[x1] = [prev1]
-            if prev2:
-                self.prev[x2] = [prev2]
-        x = self.forward(self.x1, self.x2)
-        self.error_grad = cp.ones_like(x)
-        
-        return x, self
-    
-    def forward(self, x1, x2):
-        # assume each shape is length 3
-        return cp.einsum("ijk,ikl->ijl", x1, x2)
-
-    def backward_calc(self, error, lr):
-        error = error * self.error_grad
-        
-        
-        delta_error1 = cp.einsum("ijk,ilk->ijl",error, self.x2)
-        delta_error2 = cp.einsum("ijk,ijl->ikl", self.x1, error)
-        #print(delta_error1)
-        return delta_error1, delta_error2
-    
-    def backward(self, error, lr):
-        delta_error1, delta_error2 = self.backward_calc(error, lr)
-        if self.prev:
-            if self.prev[x1]:
-                self.prev[x1].backward(delta_error1, lr)
-            if self.prev[x2]:
-                self.prev[x2].backward(delta_error2, lr)
-        else:
-            return delta_error1, delta_error2
-        
+        return delta_error.T        
 
 class Conv2d(Layer):
     def __init__(self, in_channels, out_channels, kernel_size, stride=1, padding=0):
@@ -235,7 +160,7 @@ class Conv2d(Layer):
     # TODO: optimize this
     def backward_calc(self, error, lr):
         
-        error = error * self.error_grad
+        error = self.error_grad(error)
         
         # error is cp array of shape (batch_size, out_channels, new_height, new_width)
         batch_size = error.shape[0]
@@ -303,7 +228,7 @@ class MaxPool2d(Layer):
         
     
     def backward_calc(self, error, lr):
-        error = error * self.error_grad
+        error = self.error_grad(error)
         
         delta_error = cp.zeros(self.padded_input.shape)
         
@@ -334,30 +259,5 @@ class MaxPool2d(Layer):
         
         return delta_error
 
-class Flatten(Layer):
-    def __init__(self):
-        super().__init__()
-    
-    def forward(self, x):
-        self.input_shape = x.shape
-        
-        # reshape to (batch_size, channel_size * height * width)
-        return x.reshape(x.shape[0], -1)
-    
-    def backward_calc(self, error, lr):
-        error = error * self.error_grad
-        
-        return error.reshape(self.input_shape)
-
-# TODO: Implement BatchNorm2d
-
 if __name__ == "__main__":
-    network = MatMul()
-    x1 = cp.arange(5*3*4).reshape(5,3,4)
-    x2 = cp.arange(5*4*2).reshape(5,4,2)
-    #error = cp.array([[[[1,0],[0,1]],[[1,0],[0,1]],[[1,0],[0,1]]],[[[1,0],[0,1]],[[1,0],[0,1]],[[1,0],[0,1]]]])
-    error = cp.arange(5*3*2).reshape(5,3,2)
-    network((x1,None),(x2,None))
-    #print(network.error_grad.shape)
-    ret1, ret2 = network.backward(error, 0.01)
-    print(ret2)
+    pass

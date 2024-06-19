@@ -1,5 +1,5 @@
 from Functions import *
-from Layers import CompoundLayer, Linear, Residual, Conv2d, MaxPool2d, Flatten
+from Layers import CompoundLayer, Linear, Conv2d, MaxPool2d
 from Trainer import Trainer, load_mnist
 
 class CNN(CompoundLayer):
@@ -11,8 +11,6 @@ class CNN(CompoundLayer):
         self.pool1 = MaxPool2d(2, 2)
         self.pool2 = MaxPool2d(2, 2)
         
-        self.flatten = Flatten()
-        
         self.linear1 = Linear(32 * 7 * 7, 128)
         self.linear2 = Linear(128, 10)
         
@@ -20,8 +18,7 @@ class CNN(CompoundLayer):
         x = relu(self.conv1(x))
         x = self.pool1(x)
         x = relu(self.conv2(x))
-        x = self.pool2(x)
-        x = self.flatten(x)
+        x = flatten(self.pool2(x))
         
         x = relu(self.linear1(x))
         x = relu(self.linear2(x))
@@ -30,8 +27,8 @@ class CNN(CompoundLayer):
 class SimpleFeedForward(CompoundLayer):
     def __init__(self):
         super().__init__()
-        self.linear1 = Linear(784, 256)
-        self.linear2 = Linear(256, 64)
+        self.linear1 = Linear(784, 128)
+        self.linear2 = Linear(128, 64)
         self.linear3 = Linear(64, 10)
 
     def forward(self, x):
@@ -46,7 +43,7 @@ if __name__ == "__main__":
     network = SimpleFeedForward()
     #network = Network([784, 64, 32, 10],["sigmoid", "sigmoid", "sigmoid"],lr=0.01, loss_func="mean_squared_error")
     X, y = load_mnist()
-    trainer = Trainer(X, y, batch=64, epochs=20, lr = 0.005, test_size=0.2, validation_size=0.1, loss_func="cross_entropy")
+    trainer = Trainer(X, y, batch=128, epochs=40, lr = 0.005, test_size=0.2, validation_size=0.1, loss_func="cross_entropy")
     trainer.train(network)
     trainer.accuracy(network)
     trainer.visualize_loss()

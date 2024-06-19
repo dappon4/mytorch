@@ -1,9 +1,8 @@
 import cupy as cp
 from cupy.lib.stride_tricks import sliding_window_view, as_strided
+from Tensor import Tensor
 
 def softmax(x):
-    # shape of x: (batch_size, 1, output_size)
-    # calculate softmax for each row
     x = cp.exp(x - cp.max(x))
     return x / cp.sum(x, axis=-1, keepdims=True)
 
@@ -38,19 +37,23 @@ def he_init_conv2d(filter_shape):
 
     return cp.random.normal(loc=0, scale=stddev, size=filter_shape)
 
-def relu(x):
-    inp, prev = x
-    fil = cp.where(inp > 0, 1, 0)
-    prev.error_grad = fil
-    
-    return inp * fil, prev
+def relu(tensor):
+    fil = cp.where(tensor.tensor > 0, 1, 0)
+    for prev in tensor.prev:
 
-def sigmoid(x):
-    inp, prev = x
-    fil = 1/(1+cp.exp(-inp))
-    prev.error_grad = fil * (1 - fil)
+        f = prev.error_grad
+        prev.error_grad = lambda x: f(x * fil)
+
+    tensor.tensor *= fil
+    return tensor
+
+def sigmoid(tensor):
+    tensor.tensor = 1/(1+cp.exp(-tensor.tensor))
+    for prev in tensor.prev:
+        f = prev.error_grad
+        prev.error_grad = lambda x: f(x * tensor.tensor * (1 - tensor.tensor))
     
-    return fil, prev
+    return tensor
 
 
 def sliding_window_view_with_strides(matrix, sub_shape, stride):
@@ -65,6 +68,27 @@ def sliding_window_view_with_strides(matrix, sub_shape, stride):
 
     sub_matrices = as_strided(matrix, shape=shape, strides=new_strides)
     return sub_matrices
+
+def matmul(tensor1, tensor2):
+    # assume the sahpes are length 3
+    for prev in tensor1.prev:
+        f = prev.error_grad
+        prev.error_grad = lambda x: f(cp.einsum("ijk,ilk->ijl",x,tensor2.tensor))
+    for prev in tensor2.prev:
+        f = prev.error_grad
+        prev.error_grad = lambda x: f(cp.einsum("ijk,ijl->ikl",tensor1.tensor,x))
+    
+    return Tensor(cp.einsum("ijk,ikl->ijl", tensor1.tensor, tensor2.tensor), prev=tensor1.prev.union(tensor2.prev))
+
+def flatten(tensor):
+    shape = tensor.tensor.shape
+    
+    for prev in tensor.prev:
+        f = prev.error_grad
+        prev.error_grad = lambda x: f(x.reshape(shape))
+    
+    tensor.tensor.reshape((shape[0], -1))
+    return tensor
 
 if __name__ == "__main__":
     x = cp.zeros((2,3,4,4))
