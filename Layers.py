@@ -65,13 +65,10 @@ class CompoundLayer(Layer):
         self.final_layer = tensor.prev
         
         return tensor
-    
-    def backward_calc(self, error, lr):
-        # TODO: account for multiple final layers
+
+    def backward(self, error, lr):
         for layer in self.final_layer:
-            error = layer.backward_calc(error, lr)
-        
-        return error
+            layer.backward(error, lr)
     
     def train(self):
         for layer in self.final_layer:
@@ -159,7 +156,6 @@ class Conv2d(Layer):
 
     # TODO: optimize this
     def backward_calc(self, error, lr):
-        
         error = self.error_grad(error)
         
         # error is cp array of shape (batch_size, out_channels, new_height, new_width)

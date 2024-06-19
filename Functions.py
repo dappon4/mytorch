@@ -86,8 +86,8 @@ def flatten(tensor):
     for prev in tensor.prev:
         f = prev.error_grad
         prev.error_grad = lambda x: f(x.reshape(shape))
-    
-    tensor.tensor.reshape((shape[0], -1))
+
+    tensor.tensor = tensor.tensor.reshape((shape[0], -1))
     return tensor
 
 if __name__ == "__main__":

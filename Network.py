@@ -19,7 +19,7 @@ class CNN(CompoundLayer):
         x = self.pool1(x)
         x = relu(self.conv2(x))
         x = flatten(self.pool2(x))
-        
+
         x = relu(self.linear1(x))
         x = relu(self.linear2(x))
         return x
@@ -27,8 +27,8 @@ class CNN(CompoundLayer):
 class SimpleFeedForward(CompoundLayer):
     def __init__(self):
         super().__init__()
-        self.linear1 = Linear(784, 128)
-        self.linear2 = Linear(128, 64)
+        self.linear1 = Linear(784, 256)
+        self.linear2 = Linear(256, 64)
         self.linear3 = Linear(64, 10)
 
     def forward(self, x):
@@ -40,10 +40,10 @@ class SimpleFeedForward(CompoundLayer):
 if __name__ == "__main__":
     
 
-    network = SimpleFeedForward()
+    network = CNN()
     #network = Network([784, 64, 32, 10],["sigmoid", "sigmoid", "sigmoid"],lr=0.01, loss_func="mean_squared_error")
-    X, y = load_mnist()
-    trainer = Trainer(X, y, batch=128, epochs=40, lr = 0.005, test_size=0.2, validation_size=0.1, loss_func="cross_entropy")
+    X, y = load_mnist(flatten=False)
+    trainer = Trainer(X, y, batch=256, epochs=5, lr = 0.005, test_size=0.2, validation_size=0.1, loss_func="cross_entropy")
     trainer.train(network)
     trainer.accuracy(network)
     trainer.visualize_loss()
