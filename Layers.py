@@ -61,7 +61,7 @@ class CompoundLayer(Layer):
         self.final_layer = set()
     
     def __call__(self, tensor):
-        self.error_grad = lambda x: x
+        self.error_grad = lambda x: x # is this needed?
         self.prev = tensor.prev
             
         tensor = self.forward(tensor)

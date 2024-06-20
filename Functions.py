@@ -95,6 +95,17 @@ def flatten(tensor):
     tensor.tensor = tensor.tensor.reshape((shape[0], -1))
     return tensor
 
+def dropout(tensor, p):
+    mask = cp.random.binomial(1, p, tensor.tensor.shape)
+    for prev in tensor.prev: break
+    if prev.training:
+        for prev in tensor.prev:
+            f = prev.error_grad
+            prev.error_grad = lambda x: f(x * mask)
+    
+        tensor.tensor *= mask
+    return tensor
+
 if __name__ == "__main__":
     x = cp.zeros((2,3,4,4))
     y = sliding_window_view_with_strides(x, (2,2), (2,2))
