@@ -22,7 +22,8 @@ def cross_entropy(y_pred, y_true):
 
 def cross_entropy_derivative(y_pred, y_true):
     #print(cp.mean(y_pred - y_true, axis=0))
-    y_pred = softmax(y_pred)
+    y_pred = cp.exp(y_pred - cp.max(y_pred))
+    y_pred = y_pred / cp.sum(y_pred, axis=-1, keepdims=True)
     return y_pred - y_true
 
 def xavier_init(input_size, output_size):
@@ -96,7 +97,7 @@ def flatten(tensor):
     return tensor
 
 def dropout(tensor, p):
-    mask = cp.random.binomial(1, p, tensor.tensor.shape)
+    mask = cp.random.binomial(1, 1-p, tensor.tensor.shape)
     for prev in tensor.prev: break
     if prev.training:
         for prev in tensor.prev:

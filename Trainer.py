@@ -5,6 +5,7 @@ import cupy as cp
 import numpy as np
 import pandas as pd
 import time
+import datetime
 import matplotlib.pyplot as plt
 
 cp.cuda.Device(0).use()
@@ -71,7 +72,7 @@ class Trainer:
             self.train_losses.append(average_train_loss)
             self.validation_losses.append(average_validation_loss)
             
-            print(f'Epoch {epoch+1}/{self.epochs} Training Loss: {average_train_loss:.4f} Validation Loss: {average_validation_loss:.4f} Time: {t2-t1:.3f} seconds')
+            print(f'Epoch {epoch+1}/{self.epochs} Training Loss: {average_train_loss:.4f} Validation Loss: {average_validation_loss:.4f} Time: {t2-t1:.3f} seconds [{datetime.datetime.now().strftime("%H:%M:%S")}]')
     
     def visualize_loss(self):
         plt.plot(self.train_losses, label="Training Loss")

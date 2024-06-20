@@ -31,7 +31,7 @@ class Layer:
         raise NotImplementedError
     
     def backward(self, error, lr):
-        # TODO: account for multiple previous layers
+        #print(self)
         delta_error = self.backward_calc(error, lr)
         
         if self.prev:
@@ -82,21 +82,16 @@ class CompoundLayer(Layer):
             layer.eval()
     
 class Linear(Layer):
-    def __init__(self, input_size, output_size, dropout=0.0):
+    def __init__(self, input_size, output_size):
         super().__init__()
         self.weight = xavier_init(input_size, output_size)
         self.bias = cp.zeros((output_size,))
-        
-        self.dropout = dropout
     
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}(input_size={self.weight.shape[0]}, output_size={self.weight.shape[1]})"
     
     def forward(self, x):
         # x is cp array
-        if self.training:
-            dropout_mask = cp.random.binomial(1, 1-self.dropout, size = x.shape)
-            x = x * dropout_mask / (1-self.dropout)
 
         self.input = x
         #print(x.shape, self.weight.shape, self.bias.shape)
