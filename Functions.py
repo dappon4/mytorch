@@ -61,20 +61,6 @@ def softmax(tensor):
     
     return tensor
 
-
-def sliding_window_view_with_strides(matrix, sub_shape, stride):
-    batch_size, in_channels, height, width = matrix.shape
-    sub_rows, sub_cols = sub_shape
-
-    # Calculate the shape and strides for the submatrices
-    out_height = (height - sub_rows) // stride[0] + 1
-    out_width = (width - sub_cols) // stride[1] + 1
-    shape = (batch_size, in_channels, out_height, out_width, sub_rows, sub_cols)
-    new_strides = (matrix.strides[0],matrix.strides[1],matrix.strides[2] * stride[0],matrix.strides[3] * stride[1],matrix.strides[2],matrix.strides[3])
-
-    sub_matrices = as_strided(matrix, shape=shape, strides=new_strides)
-    return sub_matrices
-
 def matmul(tensor1, tensor2):
     # assume the sahpes are length 3
     for prev in tensor1.prev:
@@ -88,7 +74,6 @@ def matmul(tensor1, tensor2):
 
 def flatten(tensor):
     shape = tensor.tensor.shape
-    
     for prev in tensor.prev:
         f = prev.error_grad
         prev.error_grad = lambda x: f(x.reshape(shape))
@@ -108,9 +93,4 @@ def dropout(tensor, p):
     return tensor
 
 if __name__ == "__main__":
-    x = cp.zeros((2,3,4,4))
-    y = sliding_window_view_with_strides(x, (2,2), (2,2))
-    z = cp.ones(y.shape)
-    y += z
-    print(x)
-    print(y.shape)
+    pass
