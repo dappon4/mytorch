@@ -1,10 +1,6 @@
 import cupy as cp
-from cupy.lib.stride_tricks import sliding_window_view, as_strided
+from cupy.lib.stride_tricks import as_strided
 from Tensor import Tensor
-
-def softmax(x):
-    x = cp.exp(x - cp.max(x))
-    return x / cp.sum(x, axis=-1, keepdims=True)
 
 def softmax_derivative(x):
     return x
@@ -19,7 +15,9 @@ def mean_squared_error_derivative(y_pred, y_true):
 
 def cross_entropy(y_pred, y_true):
     # cross entropy and softmax all together
-    y_pred = softmax(y_pred)
+    #y_pred = softmax(y_pred)
+    y_pred = cp.exp(y_pred - cp.max(y_pred))
+    y_pred = y_pred / cp.sum(y_pred, axis=-1, keepdims=True)
     return (-cp.sum(y_true * cp.log(y_pred)) / len(y_pred)).item()
 
 def cross_entropy_derivative(y_pred, y_true):
@@ -52,6 +50,13 @@ def sigmoid(tensor):
     for prev in tensor.prev:
         f = prev.error_grad
         prev.error_grad = lambda x: f(x * tensor.tensor * (1 - tensor.tensor))
+    
+    return tensor
+
+def softmax(tensor):
+    x = tensor.tensor
+    x = cp.exp(x - cp.max(x))
+    tensor.tensor = x / cp.sum(x, axis=-1, keepdims=True)
     
     return tensor
 
