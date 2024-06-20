@@ -6,6 +6,9 @@ class Tensor():
             self.prev = prev
         self.tensor = x
     
+    def __repr__(self) -> str:
+        return f"Tensor({self.tensor}, previous={self.prev})"
+    
     def __add__(self, other):
         self.prev = self.prev.union(other.prev)
         self.tensor += other.tensor

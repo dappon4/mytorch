@@ -12,6 +12,9 @@ class Layer:
         
         # TODO: initialize error_grad properly
         self.error_grad = lambda x: x
+    
+    def __repr__(self) -> str:
+        return f"{self.__class__.__name__}()"
         
     def __call__(self, tensor):
         self.error_grad = lambda x: x
@@ -85,7 +88,10 @@ class Linear(Layer):
         self.bias = cp.zeros((output_size,))
         
         self.dropout = dropout
-        
+    
+    def __repr__(self) -> str:
+        return f"{self.__class__.__name__}(input_size={self.weight.shape[0]}, output_size={self.weight.shape[1]})"
+    
     def forward(self, x):
         # x is cp array
         if self.training:
@@ -133,6 +139,8 @@ class Conv2d(Layer):
         self.filter = he_init_conv2d((out_channels, in_channels, *self.kernel_size))
         self.bias = None
     
+    def __repr__(self) -> str:
+        return f"{self.__class__.__name__}(in_channels={self.in_channels}, out_channels={self.out_channels}, kernel_size={self.kernel_size}, stride={self.stride}, padding={self.padding})"
     
     def forward(self, x):
         # output size: [(W−K+2P)/S]+1
@@ -207,6 +215,9 @@ class MaxPool2d(Layer):
             self.stride = (stride, stride)
         else:
             self.stride = stride
+    
+    def __repr__(self) -> str:
+        return f"{self.__class__.__name__}(kernel_size={self.kernel_size}, stride={self.stride}, padding={self.padding})"
     
     def forward(self,x):
         batch_size, channel_size = x.shape[:2]
