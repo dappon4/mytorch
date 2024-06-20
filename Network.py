@@ -55,11 +55,11 @@ class Test(CompoundLayer):
 
 if __name__ == "__main__":
     
-    #cp.random.seed(0)
-    network = Test()
+    cp.random.seed(0)
+    network = CNN()
     #network = Network([784, 64, 32, 10],["sigmoid", "sigmoid", "sigmoid"],lr=0.01, loss_func="mean_squared_error")
-    X, y = load_mnist()
-    trainer = Trainer(X, y, batch=64, epochs=20, lr = 0.005, test_size=0.2, validation_size=0.1, loss_func="cross_entropy")
+    X, y = load_mnist(flatten=False)
+    trainer = Trainer(X, y, batch=256, epochs=5, lr = 0.005, test_size=0.2, validation_size=0.1, loss_func="cross_entropy")
     trainer.train(network)
     trainer.accuracy(network)
     trainer.visualize_loss()

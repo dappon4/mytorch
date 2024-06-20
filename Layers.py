@@ -125,9 +125,9 @@ class Conv2d(Layer):
             self.kernel_h, self.kernel_w = kernel_size
         
         if type(stride) == int:
-            self.stride = (stride, stride)
+            self.stride_h = self.stride_w = stride
         else:
-            self.stride = stride
+            self.stride_h,self.stride_w = stride
 
         self.padding = padding
         
@@ -135,61 +135,69 @@ class Conv2d(Layer):
         self.bias = None
     
     def __repr__(self) -> str:
-        return f"{self.__class__.__name__}(in_channels={self.in_channels}, out_channels={self.out_channels}, kernel_size={self.kernel_size}, stride={self.stride}, padding={self.padding})"
+        return f"{self.__class__.__name__}(in_channels={self.in_channels}, out_channels={self.out_channels}, kernel_size=({self.kernel_h},{self.kernel_w}), stride={self.stride}, padding={self.padding})"
 
     def forward(self,x):
+
         batch_size = x.shape[0]
-        output_h = (x.shape[2] - self.kernel_h + 2 * self.padding)//self.stride[0] + 1
-        output_w = (x.shape[3] - self.kernel_w + 2 * self.padding)//self.stride[1] + 1
+        output_h = (x.shape[2] - self.kernel_h + 2 * self.padding)//self.stride_h + 1
+        output_w = (x.shape[3] - self.kernel_w + 2 * self.padding)//self.stride_w + 1
         
-        window_i = cp.repeat(cp.arange(self.kernel_h), self.kernel_w).reshape(1,-1) + cp.repeat(cp.arange(output_w), output_h).reshape(-1,1)
-        window_j = cp.tile(cp.arange(self.kernel_w),self.kernel_h).reshape(1,-1) + cp.tile(cp.arange(output_w),output_h).reshape(-1,1)
+        if self.bias is None:
+            self.bias = cp.zeros((1, self.out_channels, output_h, output_w))
+        
+        self.window_i = cp.repeat(cp.arange(self.kernel_h), self.kernel_w).reshape(1,-1) + (cp.repeat(cp.arange(output_h), output_w)*self.stride_h).reshape(-1,1)
+        self.window_j = cp.tile(cp.arange(self.kernel_w),self.kernel_h).reshape(1,-1) + (cp.tile(cp.arange(output_w),output_h)*self.stride_w).reshape(-1,1)
+
         self.padded_input = cp.pad(x, ((0,0), (0,0), (self.padding, self.padding), (self.padding, self.padding)))
         
-        flattend = self.padded_input[:,:,window_i,window_j]
+        flattend = self.padded_input[:,:,self.window_i,self.window_j]
         flattend_filter = self.filter.reshape((self.out_channels, self.in_channels, 1, self.kernel_h*self.kernel_w))
         
-        #TODO: maybe optimize this part?
+        # maybe optimze this
         return cp.tensordot(flattend, flattend_filter, axes=([1,3], [1,3])).transpose(0,2,1,3).reshape(batch_size, self.out_channels, output_h, output_w) + self.bias
     
-    # TODO: optimize this
     def backward_calc(self, error, lr):
         error = self.error_grad(error)
         
         # error is cp array of shape (batch_size, out_channels, new_height, new_width)
-        batch_size = error.shape[0]
+        batch_size = self.padded_input.shape[0]
         
-        delta_filter = cp.zeros((batch_size,self.out_channels, self.in_channels, *self.kernel_size))
-        delta_error = cp.zeros((batch_size, self.in_channels, self.padded_input.shape[2], self.padded_input.shape[3]))
+        error_h, error_w = error.shape[2:]
+        error_size = error_h * error_w
         
-        for j in range(0, error.shape[2]): # height dimension
-            for k in range(0, error.shape[3]): # width dimension
-                delta_filter += error[:,:,j,k].reshape(batch_size,self.out_channels,1,1,1) * self.padded_input[:,:,j*self.stride[0]:j*self.stride[0]+self.kernel_h, k*self.stride[1]:k*self.stride[1]+self.kernel_w].reshape(batch_size,1,self.in_channels,self.kernel_h,self.kernel_w)
-                delta_error[:,:,j*self.stride[0]:j*self.stride[0]+self.kernel_h,k*self.stride[1]:k*self.stride[1]+self.kernel_w] += cp.sum(error[:,:,j,k].reshape(batch_size, self.out_channels,1,1,1) * self.filter, axis=1)
-        #print(delta_error)
+        filter_i = cp.tile(self.window_i, self.in_channels)
+        filter_j = cp.tile(self.window_j, self.in_channels)
+        filter_c = cp.repeat(cp.repeat(cp.arange(self.in_channels), self.kernel_h*self.kernel_w).reshape(1,-1), error_size, axis=0)
         
-        self.filter -= lr * cp.mean(delta_filter, axis=0)
-        self.bias -= lr * cp.mean(error, axis=0)
+        sub_matrices = self.padded_input[:,filter_c,filter_i,filter_j]
+        sub_matrices = cp.expand_dims(sub_matrices, axis = 1)
+        
+        flattend_error = error.reshape(batch_size, self.out_channels, -1)
+        flattend_error = cp.expand_dims(flattend_error, axis = -1)
+        
+        delta_filter = cp.sum(sub_matrices * flattend_error,axis = 2).reshape(batch_size, self.out_channels, self.in_channels, self.kernel_h, self.kernel_w)
+        
+        # calculate delta_error
+        flattened_filter = self.filter.reshape(self.out_channels, self.in_channels, 1, -1)
+        flattened_filter = cp.expand_dims(flattened_filter, axis = 0)
+
+        flattend_error = cp.expand_dims(flattend_error, axis = 2)
+
+        delta_error = cp.sum(flattend_error * flattened_filter, axis = 1)
+
+        delta_error_base = cp.zeros_like(self.padded_input, dtype=cp.float64)
+
+        cp.add.at(delta_error_base, (slice(None), slice(None), self.window_i, self.window_j), delta_error)
         
         if self.padding > 0:
-            delta_error = delta_error[:,:,self.padding:-self.padding,self.padding:-self.padding]
+            delta_error_base = delta_error_base[:,:,self.padding:-self.padding,self.padding:-self.padding]
         
-        return delta_error
-    
-    def new_backward(self, error, lr):
-        error = error * self.error_grad
+        self.filter -= lr * cp.mean(delta_filter, axis=0)
+        self.bias -= lr * cp.mean(error, axis = 0)
         
-        # error is cp array of shape (batch_size, out_channels, new_height, new_width)
-        batch_size = self.padded_input.shape[0]
-        channel_size = self.padded_input.shape[1]
+        return delta_error_base
         
-        error_size = error.shape[2] * error.shape[3]
-        
-        input_sub_matrices = sliding_window_view_with_strides(self.padded_input, self.kernel_size, self.stride).reshape(batch_size, channel_size, -1, self.kernel_h, self.kernel_w)
-        flattened_error = error.reshape(batch_size, error.size[1], -1, 1).repeat(self.kernel_h*self.kernel_w, axis = -1).reshape(batch_size, error.size[1], -1, self.kernel_h,self.kernel_w)
-        delta_filter_flattened = input_sub_matrices * flattened_error
-        
-
 class MaxPool2d(Layer):
     def __init__(self,kernel_size, stride=1, padding=0):
         super().__init__()
@@ -257,8 +265,10 @@ class MaxPool2d(Layer):
         return delta_error
 
 if __name__ == "__main__":
-     cnn = Conv2d(1,3,2)
-     a = cnn.forward(cp.arange(1*1*4*4).reshape(1,1,4,4))
-     b = cnn.new_forward(cp.arange(1*1*4*4).reshape(1,1,4,4))
-     print(a == b)
-     
+    cnn = Conv2d(3,5,2)
+    err = cnn.forward(cp.arange(10*3*4*4).reshape(10,3,4,4))
+    a = cnn.backward_calc(err, 0.01)
+    b = cnn.new_backward(err, 0.01)
+    print(a[0])
+    print("b")
+    print(b[0])
