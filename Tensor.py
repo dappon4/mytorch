@@ -1,3 +1,5 @@
+import cupy as cp
+
 class Tensor():
     def __init__(self, x, prev=None):
         if prev is None:
@@ -23,3 +25,22 @@ class Tensor():
     
     def __rmul__(self, num):
         return self.__mul__(num)
+    
+    def transpose(self, *dimension):
+        counter_index = [0]*len(dimension)
+        for i, dim in enumerate(dimension):
+            counter_index[dim] = i
+        
+        counter_index = tuple(counter_index)
+        for prev in self.prev:
+            f = prev.error_grad
+            prev.error_grad = lambda x: f(x.transpose(*counter_index))
+        
+        self.tensor.transpose(*dimension)
+        
+if __name__ == "__main__":
+    t = Tensor(cp.random.rand(4,5,6,7,8))
+    t.transpose(3,0,1,4,2)
+    #t.transpose(1,2,0)
+    t.transpose(1,2,4,0,3)
+    print(t.tensor.shape)
