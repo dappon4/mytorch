@@ -37,7 +37,15 @@ class Tensor():
             prev.error_grad = lambda x: f(x.transpose(*counter_index))
         
         self.tensor.transpose(*dimension)
-        
+    
+    def reshape(self, *shape):
+        curr_shape = self.tensor.shape
+        for prev in self.prev:
+            f = prev.error_grad
+            prev.error_grad = lambda x: f(x.reshape(*curr_shape))
+
+        return Tensor(self.tensor.reshape(*shape), self.prev)
+
 if __name__ == "__main__":
     t = Tensor(cp.random.rand(4,5,6,7,8))
     t.transpose(3,0,1,4,2)

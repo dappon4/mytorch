@@ -2,8 +2,6 @@ import cupy as cp
 from cupy.lib.stride_tricks import as_strided
 from Tensor import Tensor
 
-def softmax_derivative(x):
-    return x
 
 def mean_squared_error(y_pred, y_true):
     #print(cp.mean(cp.mean(cp.power(y_pred - y_true,2),axis=-1)))
@@ -54,23 +52,24 @@ def sigmoid(tensor):
     
     return tensor
 
-def softmax(tensor):
+def softmax(tensor, axis=-1):
     x = tensor.tensor
-    x = cp.exp(x - cp.max(x))
-    tensor.tensor = x / cp.sum(x, axis=-1, keepdims=True)
+    x = cp.exp(x - cp.max(x, axis=axis, keepdims=True))
+    tensor.tensor = x / cp.sum(x, axis=-axis, keepdims=True)
     
     return tensor
 
 def matmul(tensor1, tensor2):
-    # assume the sahpes are length 3
+    shape1 = tensor1.tensor.shape
+    shape2 = tensor2.tensor.shape
     for prev in tensor1.prev:
         f = prev.error_grad
-        prev.error_grad = lambda x: f(cp.einsum("ijk,ilk->ijl",x,tensor2.tensor))
+        prev.error_grad = lambda x: f(cp.matmul(x,tensor2.tensor.transpose(*shape2[:-2],shape2[-1],shape2[-2])))
     for prev in tensor2.prev:
         f = prev.error_grad
-        prev.error_grad = lambda x: f(cp.einsum("ijk,ijl->ikl",tensor1.tensor,x))
+        prev.error_grad = lambda x: f(cp.matmul(tensor1.tensor.transpose(*shape1[:-2],shape1[-1],shape1[-2]),x))
     
-    return Tensor(cp.einsum("ijk,ikl->ijl", tensor1.tensor, tensor2.tensor), prev=tensor1.prev.union(tensor2.prev))
+    return Tensor(cp.matmul(tensor1.tensor, tensor2.tensor), prev=tensor1.prev.union(tensor2.prev))
 
 def flatten(tensor):
     shape = tensor.tensor.shape
