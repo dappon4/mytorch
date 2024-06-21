@@ -1,29 +1,25 @@
-from Functions import *
-from Layers import CompoundLayer, Linear
-from Trainer import Trainer, load_mnist
+from F.Activation import relu
+from nn.Module import CompoundModule, Linear
+from Util.Trainer import Trainer, load_mnist
 
-class ScaledDotProductAttention(CompoundLayer):
-    def __init__(self, d_model):
+class SimpleFeedForward(CompoundModule):
+    def __init__(self, input_size, hidden_size, output_size):
         super().__init__()
-        self.d_model = d_model
-        
-        self.fc_Q = Linear(d_model, d_model)
-        self.fc_K = Linear(d_model, d_model)
-        self.fc_V = Linear(d_model, d_model)
-
+        self.fc1 = Linear(input_size, hidden_size)
+        self.fc2 = Linear(hidden_size, output_size)
+    
     def forward(self, x):
-        # x is of shape (batch_size, seq_len, d_model)
-        Q = self.fc_Q(x)
-        K = self.fc_K(x)
-        V = self.fc_V(x)
-        
-        QK = matmul(Q, K.transpose(0, 2, 1)) / cp.sqrt(self.d_model)
-        # QK is of shape (batch, seq_len, seq_len)
-        scaled = softmax(QK)
-        x = matmul(scaled, V)
-        # x is of shape (batch, seq_len, d_model)
+        x = self.fc1(x)
+        x = relu(x)
+        x = self.fc2(x)
+        x = relu(x)
         
         return x
 
 if __name__ == "__main__":
-    pass
+    X, y = load_mnist()
+    network = SimpleFeedForward(784, 128, 10)
+    trainer = Trainer(X, y, batch=64, epochs=10, lr=0.001, test_size=0.2, validation_size=0.2, loss_func="cross_entropy")
+    trainer.train(network)
+    trainer.accuracy(network)
+    trainer.visualize_loss()

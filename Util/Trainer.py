@@ -1,6 +1,6 @@
 from sklearn.datasets import fetch_openml
 from sklearn.model_selection import train_test_split
-from Functions import *
+from F.Evaluator import mean_squared_error, mean_squared_error_derivative, cross_entropy, cross_entropy_derivative
 import cupy as cp
 import numpy as np
 import pandas as pd

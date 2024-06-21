@@ -1,11 +1,9 @@
 from typing import Any
-from Functions import *
+from F.Initializer import he_init_conv2d, xavier_init
 from Tensor import Tensor
 import cupy as cp
-from cupy.lib.stride_tricks import sliding_window_view, as_strided
-import time
 
-class Layer:
+class Module:
     def __init__(self):
         self.prev = set()
         self.training = True
@@ -54,7 +52,7 @@ class Layer:
         res = self(Tensor(X)).tensor
         return res
 
-class CompoundLayer(Layer):
+class CompoundModule(Module):
     # TODO: connect the previous layer to the first layer
     def __init__(self):
         super().__init__()
@@ -81,7 +79,7 @@ class CompoundLayer(Layer):
         for layer in self.final_layer:
             layer.eval()
     
-class Linear(Layer):
+class Linear(Module):
     def __init__(self, input_size, output_size):
         super().__init__()
         self.weight = xavier_init(input_size, output_size)
@@ -112,7 +110,7 @@ class Linear(Layer):
         
         return delta_error.T        
 
-class Conv2d(Layer):
+class Conv2d(Module):
     def __init__(self, in_channels, out_channels, kernel_size, stride=1, padding=0):
         super().__init__()
         
@@ -198,7 +196,7 @@ class Conv2d(Layer):
         
         return delta_error_base
         
-class MaxPool2d(Layer):
+class MaxPool2d(Module):
     def __init__(self,kernel_size, stride=1, padding=0):
         super().__init__()
         self.stride = stride
@@ -248,7 +246,7 @@ class MaxPool2d(Layer):
         
         return delta_error
         
-class LayerNorm(Layer):
+class LayerNorm(Module):
     def __init__(self, axis=-1):
         super().__init__()
         # flatten the input after the axis and normalize

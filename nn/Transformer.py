@@ -1,5 +1,8 @@
-from Functions import *
-from Layers import CompoundLayer, Linear, LayerNorm
+from F.Activation import softmax
+from F.Util import matmul
+from Module import CompoundLayer, Linear, LayerNorm
+
+import cupy as cp
 
 class MultiHeadAttention(CompoundLayer):
     def __init__(self, d_model, num_heads):
