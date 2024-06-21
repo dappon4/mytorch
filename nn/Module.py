@@ -8,7 +8,6 @@ class Module:
         self.prev = set()
         self.training = True
         
-        # TODO: initialize error_grad properly
         self.error_grad = lambda x: x
     
     def __repr__(self) -> str:
@@ -18,18 +17,15 @@ class Module:
         self.error_grad = lambda x: x
         self.prev = tensor.prev
         
-        tensor = Tensor(self.forward(tensor.tensor), {self})
-        
-        return tensor
+        return Tensor(self.forward(tensor.tensor), {self})
     
     def forward(self, x):
         raise NotImplementedError
 
     def backward_calc(self, error, lr):
-        raise NotImplementedError
+        return error
     
     def backward(self, error, lr):
-        #print(self)
         delta_error = self.backward_calc(error, lr)
         
         if self.prev:
@@ -53,31 +49,17 @@ class Module:
         return res
 
 class CompoundModule(Module):
-    # TODO: connect the previous layer to the first layer
     def __init__(self):
         super().__init__()
-        self.final_layer = set()
     
     def __call__(self, tensor):
-        self.error_grad = lambda x: x # is this needed?
-        self.prev = tensor.prev
+        self.error_grad = lambda x: x
             
         tensor = self.forward(tensor)
-        self.final_layer = tensor.prev
+        
+        self.prev, tensor.prev = tensor.prev, {self}
         
         return tensor
-
-    def backward(self, error, lr):
-        for layer in self.final_layer:
-            layer.backward(error, lr)
-    
-    def train(self):
-        for layer in self.final_layer:
-            layer.train()
-    
-    def eval(self):
-        for layer in self.final_layer:
-            layer.eval()
     
 class Linear(Module):
     def __init__(self, input_size, output_size):
@@ -90,20 +72,16 @@ class Linear(Module):
     
     def forward(self, x):
         # x is cp array
-
         self.input = x
-        #print(x.shape, self.weight.shape, self.bias.shape)
+
         x = cp.matmul(x, self.weight) + self.bias
         return x
 
     def backward_calc(self, error, lr):
         error = self.error_grad(error)
-        #print(self.input.shape, error.shape)
+
         delta_weight = cp.einsum("ij,ik->ijk", self.input, error)
-        #print(delta_weight.shape)
         delta_error = cp.matmul(self.weight, error.T)
-        
-        #print(delta_error.shape)
         
         self.weight -= lr * cp.mean(delta_weight, axis = 0)
         self.bias -= lr * cp.mean(error, axis=0)
@@ -288,6 +266,7 @@ class LayerNorm(Module):
     def calculate_jacobian(self, reshaped_x):
         # explenation
         # https://neuralthreads.medium.com/layer-normalization-and-how-to-compute-its-jacobian-for-backpropagation-55a549d5936f
+        
         N = reshaped_x.shape[-1]
         I = cp.eye(N)
         
