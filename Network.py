@@ -1,4 +1,5 @@
 from F.Activation import relu
+from F.Evaluator import cross_entropy
 from nn.Module import CompoundModule, Linear
 from Util.Trainer import Trainer, load_mnist
 
@@ -19,7 +20,7 @@ class SimpleFeedForward(CompoundModule):
 if __name__ == "__main__":
     X, y = load_mnist()
     network = SimpleFeedForward(784, 128, 10)
-    trainer = Trainer(X, y, batch=64, epochs=10, lr=0.001, test_size=0.2, validation_size=0.2, loss_func="cross_entropy")
+    trainer = Trainer(X, y, batch=64, epochs=10, lr=0.001, test_size=0.2, validation_size=0.2, loss_func=cross_entropy)
     trainer.train(network)
     trainer.accuracy(network)
     trainer.visualize_loss()

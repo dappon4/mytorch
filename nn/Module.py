@@ -43,10 +43,6 @@ class Module:
         self.training = False
         for prev in self.prev:
             prev.eval()
-    
-    def predict(self, X):
-        res = self(Tensor(X)).tensor
-        return res
 
 class CompoundModule(Module):
     def __init__(self):

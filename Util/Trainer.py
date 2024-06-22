@@ -1,6 +1,6 @@
 from sklearn.datasets import fetch_openml
 from sklearn.model_selection import train_test_split
-from F.Evaluator import mean_squared_error, mean_squared_error_derivative, cross_entropy, cross_entropy_derivative
+from Tensor import Tensor
 import cupy as cp
 import numpy as np
 import pandas as pd
@@ -11,31 +11,18 @@ import matplotlib.pyplot as plt
 cp.cuda.Device(0).use()
 
 class Trainer:
-    def __init__(self, X, y, batch, epochs, lr, test_size, validation_size, loss_func ="mean_squared_error") -> None:
+    def __init__(self, X, y, batch, epochs, lr, test_size, validation_size, loss_func) -> None:
         self.batch = batch
         self.epochs = epochs
         self.lr = lr
         self.test_size = test_size
         self.validation_size = validation_size
-        self.loss = None
-        self.loss_derivative = None
+        self.loss_func = loss_func
         self.train_losses = []
         self.validation_losses = []
 
         self.X_train, self.X_test, self.y_train, self.y_test = train_test_split(X, y, test_size=self.test_size, random_state=42, stratify=np.argmax(cp.asnumpy(y), axis=-1))
         self.X_validation, self.X_test, self.y_validation, self.y_test = train_test_split(self.X_test, self.y_test, test_size=self.validation_size, random_state=42, stratify=np.argmax(cp.asnumpy(self.y_test), axis=-1))
-        
-        if loss_func == "mean_squared_error":
-            self.loss = mean_squared_error
-            self.loss_derivative = mean_squared_error_derivative
-        elif loss_func == "cross_entropy":
-            self.loss = cross_entropy
-            self.loss_derivative = cross_entropy_derivative
-        else:
-            raise ValueError("Loss function not supported")
-    
-    def calculate_error(self, y_pred, y_true):
-        return self.loss_derivative(y_pred, y_true)
     
     def train(self, network):
         print("training...")
@@ -54,16 +41,18 @@ class Trainer:
             for i in range(0, len(self.X_train), self.batch):
                 batch_X = self.X_train[i:i+self.batch]
                 batch_y = self.y_train[i:i+self.batch]
-                y_pred = network.predict(batch_X)
-                train_loss += self.loss(y_pred, batch_y)
-                network.backward(self.calculate_error(y_pred, batch_y), self.lr)
+                y_pred = network(Tensor(batch_X))
+                loss = self.loss_func(y_pred, batch_y)
+                train_loss += loss.value
+                loss.backward(self.lr)
             
             network.eval()
             for i in range(0, len(self.X_validation), self.batch):
                 batch_X = self.X_validation[i:i+self.batch]
                 batch_y = self.y_validation[i:i+self.batch]
-                y_pred = network.predict(batch_X)
-                validation_loss += self.loss(y_pred, batch_y)
+                y_pred = network(Tensor(batch_X))
+                loss = self.loss_func(y_pred, batch_y)
+                validation_loss += loss.value
             
             t2 = time.time()
             average_train_loss = train_loss / (len(self.X_train) // self.batch)
@@ -89,7 +78,7 @@ class Trainer:
         for i in range(0, len(self.X_test), batch):
             X_batch = self.X_test[i:i+batch]
             y_batch = self.y_test[i:i+batch]
-            y_pred = network.predict(X_batch)
+            y_pred = network(Tensor(X_batch)).tensor
             
             score += cp.sum(cp.argmax(y_pred, axis=-1) == np.argmax(y_batch, axis=-1)).item()
         
@@ -103,6 +92,7 @@ def load_mnist(flatten=True):
     data = data / 255
     
     target = pd.get_dummies(digits.target).astype(int)
+    # target = cp.eye(10)[digits.target]
     target = cp.array(target)
 
     if not flatten:
