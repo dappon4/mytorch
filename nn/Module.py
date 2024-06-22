@@ -13,11 +13,13 @@ class Module:
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}()"
         
-    def __call__(self, tensor):
+    def __call__(self, *args):
         self.error_grad = lambda x: x
+        
+        tensor = args[0]
         self.prev = tensor.prev
         
-        return Tensor(self.forward(tensor.tensor), {self})
+        return Tensor(self.forward(tensor.tensor, *args[1:]), {self})
     
     def forward(self, x):
         raise NotImplementedError
@@ -52,10 +54,9 @@ class CompoundModule(Module):
     def __init__(self):
         super().__init__()
     
-    def __call__(self, tensor):
+    def __call__(self, *args):
         self.error_grad = lambda x: x
-            
-        tensor = self.forward(tensor)
+        tensor = self.forward(*args)
         
         self.prev, tensor.prev = tensor.prev, {self}
         

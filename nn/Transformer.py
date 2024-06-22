@@ -73,9 +73,9 @@ class DecoderLayer(CompoundModule):
         self.fc_K_1 = Linear(d_model, d_model)
         self.fc_V_1 = Linear(d_model, d_model)
         
-        self.encoder_K = None
-        self.encoder_V = None
         self.fc_Q_2 = Linear(d_model, d_model)
+        self.fc_K_2 = Linear(d_model, d_model)
+        self.fc_V_2 = Linear(d_model, d_model)
         
         self.linear = Linear(d_model, d_model)
         
@@ -86,7 +86,7 @@ class DecoderLayer(CompoundModule):
         self.multi_head_attention1 = MultiHeadAttention(d_model, num_heads)
         self.multi_head_attention2 = MultiHeadAttention(d_model, num_heads)
     
-    def forward(self, x):
+    def forward(self, x, encoder_output):
         x_res = x
         
         Q = self.fc_Q_1(x)
@@ -98,8 +98,10 @@ class DecoderLayer(CompoundModule):
         
         x_res = x
         Q = self.fc_Q_2(x)
+        K = self.fc_K_2(encoder_output)
+        V = self.fc_V_2(encoder_output)
         
-        x = self.multi_head_attention2(Q, self.encoder_K, self.encoder_V)
+        x = self.multi_head_attention2(Q, K, V)
         x = self.layernorm2(x + x_res)
         
         x_res = x
@@ -116,8 +118,9 @@ class Decoder(CompoundModule):
         self.layers = [DecoderLayer(d_model, num_heads) for _ in range(num_layers)]
     
     def forward(self, x):
+        encoder_output = x
         for layer in self.layers:
-            x = layer(x)
+            x = layer(x, encoder_output)
         return x
     
     def set_encoder_KV(self, encoder_K, encoder_V):
@@ -138,13 +141,7 @@ class Transformer(CompoundModule):
         
     def forward(self, x):
         x = self.encoder(x)
-        
-        encoder_K = self.fc_encoder_K(x)
-        encoder_V = self.fc_encoder_V(x)
-        
-        self.decoder.set_encoder_KV(encoder_K, encoder_V)
-        
-        # ???????????????????
+
         x = self.decoder(x)
         
         # lienar layer for output (d_model, vocab_size)
@@ -152,3 +149,6 @@ class Transformer(CompoundModule):
         x = softmax(x)
         
         return x
+    
+    def predict(self, x):
+        pass
