@@ -1,6 +1,6 @@
-from F.Activation import softmax
-from F.Util import matmul
-from Module import CompoundModule, Linear, LayerNorm
+from mytorch.F.Activation import softmax
+from mytorch.F.Util import matmul
+from mytorch.nn.Module import CompoundModule, Linear, LayerNorm
 
 import cupy as cp
 

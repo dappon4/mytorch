@@ -1,7 +1,7 @@
-from F.Activation import relu
-from F.Evaluator import cross_entropy
-from nn.Module import CompoundModule, Linear
-from Util.Trainer import Trainer, load_mnist
+from mytorch.F.Activation import relu
+from mytorch.F.Evaluator import cross_entropy
+from mytorch.nn.Module import CompoundModule, Linear
+from mytorch.Util.Trainer import Trainer, load_mnist
 
 class SimpleFeedForward(CompoundModule):
     def __init__(self, input_size, hidden_size, output_size):

@@ -1,5 +1,5 @@
 import cupy as cp
-import Tensor
+import mytorch.Tensor
 
 class Loss:
     def __init__(self, value, gradient, prev):
