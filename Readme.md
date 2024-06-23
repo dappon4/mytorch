@@ -1,11 +1,15 @@
 ## Introduction
 This is my attempt to implement a neural network from ground up using numpy and cupy, the GPU version of numpy.  
-This includes the basic functionality such as forward pass and backward pass, backpropagation, and activation functions.
+
+This include basic functionalities such as forward pass and backward pass, backpropagation, and activation functions.  
+
+I created a package named mytorch, hwich ocntains all the functions and classes required to build a neural network in Pytoch style.
 
 ## Layers
  - Linear(input_size, output_size)
  - Conv2d(in_channels, out_channels, kernel_size, stride=1, padding=0)
  - MaxPool2d(kernel_size, stride=1, padding=0)
+ - LayerNorm(axis=-1)
 
 ## Activation Functions
  - relu
@@ -25,31 +29,23 @@ The Tensor class is a wrapper for my numpy arrays.
 It retains information about the previous Layer, as it goes through the network.
 
 ## Usage
+Here is an example of how to use mytorch package to build a simple neural network. in the same style as Pytorch.    
 ```python
-from Functions import *
-from Layers import CompoundLayer, Linear, Conv2d, MaxPool2d
-from Trainer import Trainer, load_mnist
+from mytorch.F.Activation import relu
+from mytorch.nn.Module import CompoundModule, Linear
 
-class CNN(CompoundLayer):
-    def __init__(self) -> None:
+class SimpleFeedForward(CompoundModule):
+    def __init__(self, input_size, hidden_size, output_size):
         super().__init__()
-        self.conv1 = Conv2d(1, 16, 3, 1, 1)
-        self.conv2 = Conv2d(16, 32, 3, 1, 1)
-        
-        self.pool1 = MaxPool2d(2, 2)
-        self.pool2 = MaxPool2d(2, 2)
-        
-        self.linear1 = Linear(32 * 7 * 7, 128)
-        self.linear2 = Linear(128, 10)
-
+        self.fc1 = Linear(input_size, hidden_size)
+        self.fc2 = Linear(hidden_size, output_size)
+    
     def forward(self, x):
-        x = relu(self.conv1(x))
-        x = self.pool1(x)
-        x = relu(self.conv2(x))
-        x = flatten(self.pool2(x))
-
-        x = relu(self.linear1(x))
-        x = relu(self.linear2(x))
+        x = self.fc1(x)
+        x = relu(x)
+        x = self.fc2(x)
+        x = relu(x)
+        
         return x
 ```
 
@@ -64,10 +60,11 @@ Trainer arguments:
  - test_size: float, test size
 - validation_size: float, validation size
 ```python
-from Trainer import Trainer, load_mnist
+from mytorch.Util.Trainer import Trainer, load_mnist
+from mytorch.F.Evaluator import cross_entropy
 
 X, y = load_mnist(flatten=False)
-trainer = Trainer(X, y, batch=256, epochs=5, lr = 0.005, test_size=0.2, validation_size=0.1, loss_func="cross_entropy")
+trainer = Trainer(X, y, batch=64, epochs=10, lr=0.001, test_size=0.2, validation_size=0.2, loss_func=cross_entropy)
 
 trainer.train(network)
 ```
