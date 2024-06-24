@@ -237,7 +237,7 @@ class LayerNorm(Module):
         self.mean = cp.mean(reshaped_x, axis=-1, keepdims=True)
         self.std = cp.std(reshaped_x, axis=-1, keepdims=True)
         
-        self.calculate_jacobian(reshaped_x)
+        self.jacobian = self.calculate_jacobian(reshaped_x)
         
         self.y = (x - self.mean) / (self.std + 1e-5)
         
@@ -262,14 +262,14 @@ class LayerNorm(Module):
         N = reshaped_x.shape[-1]
         I = cp.eye(N)
         
-        first_part = (cp.tile(I, (*reshaped_x.shape[:-1],1,1)) - 1) / (N*self.std)
+        first_part = (cp.tile(I, (*reshaped_x.shape[:-1],1,1)) - 1) / (N*self.std[...,cp.newaxis])
         
         x_1 = cp.expand_dims(reshaped_x - self.mean, -1) # (..., N, 1)
         x_2 = cp.expand_dims(reshaped_x - self.mean, -2) # (..., 1, N)
         
-        second_part = cp.matmul(x_1, x_2) / (N*self.std**3)
+        second_part = cp.matmul(x_1, x_2) / (N*(self.std[...,cp.newaxis]**3))
         
-        self.jacobian = self.gamma * (first_part - second_part)
+        return self.gamma[...,cp.newaxis] * (first_part - second_part)
     
 if __name__ == "__main__":
     linear = Linear(3, 2)

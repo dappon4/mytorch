@@ -6,7 +6,9 @@ class Tensor():
             self.prev = set()
         else:
             self.prev = prev.copy()
+
         self.tensor = x
+        self.shape = x.shape
     
     def __repr__(self) -> str:
         return f"Tensor({self.tensor}, previous={self.prev})"
@@ -16,11 +18,20 @@ class Tensor():
     
     def __mul__(self, num):
         for prev in self.prev:
-            prev.error_grad = lambda x: prev.error_grad(num*x)
+            f = prev.error_grad
+            prev.error_grad = lambda x: f(num*x)
+        
         return Tensor(num * self.tensor, self.prev)
     
     def __rmul__(self, num):
         return self.__mul__(num)
+    
+    def __truediv__(self, num):
+        for prev in self.prev:
+            f = prev.error_grad
+            prev.error_grad = lambda x: f(x/num)
+        
+        return Tensor(self.tensor/num, self.prev)
     
     def transpose(self, *dimension):
         counter_index = [0]*len(dimension)
@@ -45,6 +56,6 @@ class Tensor():
 if __name__ == "__main__":
     t1 = Tensor(cp.ones(3))
     t2 = t1
-    t1 *= 3
+    t1 /= cp.random.rand(3)
     print(t1)
     print(t2)

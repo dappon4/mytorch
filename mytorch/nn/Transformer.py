@@ -4,6 +4,8 @@ from mytorch.nn.Module import CompoundModule, Linear, LayerNorm
 
 import cupy as cp
 
+# TODO: create mask for MHA
+
 class MultiHeadAttention(CompoundModule):
     def __init__(self, d_model, num_heads):
         super().__init__()
@@ -12,10 +14,10 @@ class MultiHeadAttention(CompoundModule):
     
     def forward(self, Q, K, V):
         
-        batch_size, seq_len = x.shape[:2]
-        Q.reshape(batch_size, self.num_heads, seq_len, self.d_model//self.num_heads)
-        K.reshape(batch_size, self.num_heads, seq_len, self.d_model//self.num_heads)
-        V.reshape(batch_size, self.num_heads, seq_len, self.d_model//self.num_heads)
+        batch_size, seq_len, _ = Q.shape
+        Q = Q.reshape(batch_size, self.num_heads, seq_len, self.d_model//self.num_heads)
+        K = K.reshape(batch_size, self.num_heads, seq_len, self.d_model//self.num_heads)
+        V = V.reshape(batch_size, self.num_heads, seq_len, self.d_model//self.num_heads)
         
         QK = matmul(Q, K.transpose(0, 1, 3, 2)) / cp.sqrt(self.d_model//self.num_heads)
         scaled = softmax(QK, axis=-2)
@@ -43,12 +45,12 @@ class EncoderLayer(CompoundModule):
     def forward(self, x):
         x_res = x
         
-        self.Q = self.fc_Q(x)
-        self.K = self.fc_K(x)
-        self.V = self.fc_V(x)
+        Q = self.fc_Q(x)
+        K = self.fc_K(x)
+        V = self.fc_V(x)
         
-        x = self.multi_head_attention(self.Q,self.K,self.V)
-        x = LayerNorm(x + x_res)
+        x = self.multi_head_attention(Q, K, V)
+        x = self.layernorm1(x + x_res)
         
         x_res = x
         x = self.linear(x)
@@ -117,16 +119,11 @@ class Decoder(CompoundModule):
         super().__init__()
         self.layers = [DecoderLayer(d_model, num_heads) for _ in range(num_layers)]
     
-    def forward(self, x):
+    def forward(self, x, decoder_input):
         encoder_output = x
         for layer in self.layers:
-            x = layer(x, encoder_output)
-        return x
-    
-    def set_encoder_KV(self, encoder_K, encoder_V):
-        for layer in self.layers:
-            layer.encoder_K = encoder_K
-            layer.encoder_V = encoder_V
+            decoder_input = layer(decoder_input, encoder_output)
+        return decoder_input
 
 class Transformer(CompoundModule):
     def __init__(self, vocab_size, num_layers=6, d_model=512, num_heads=8):
@@ -139,10 +136,10 @@ class Transformer(CompoundModule):
         
         self.output_linear = Linear(d_model, vocab_size)
         
-    def forward(self, x):
+    def forward(self, x, decoder_input):
         x = self.encoder(x)
 
-        x = self.decoder(x)
+        x = self.decoder(x, decoder_input)
         
         # lienar layer for output (d_model, vocab_size)
         x = self.output_linear(x)

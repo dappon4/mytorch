@@ -1,7 +1,10 @@
 from mytorch.F.Activation import relu
 from mytorch.F.Evaluator import cross_entropy
 from mytorch.nn.Module import CompoundModule, Linear
+from mytorch.nn.Transformer import Transformer
 from mytorch.Util.Trainer import Trainer, load_mnist
+from mytorch.Tensor import Tensor
+import cupy as cp
 
 class SimpleFeedForward(CompoundModule):
     def __init__(self, input_size, hidden_size, output_size):
@@ -18,9 +21,16 @@ class SimpleFeedForward(CompoundModule):
         return x
 
 if __name__ == "__main__":
-    X, y = load_mnist()
-    network = SimpleFeedForward(784, 128, 10)
-    trainer = Trainer(X, y, batch=64, epochs=10, lr=0.001, test_size=0.2, validation_size=0.2, loss_func=cross_entropy)
-    trainer.train(network)
-    trainer.accuracy(network)
-    trainer.visualize_loss()
+    batch_size = 16
+    vocab_size = 1000
+    seq_size = 128
+    embed_dim = 256
+    dummy_input = cp.random.rand(batch_size, seq_size, embed_dim)
+    dec_input = cp.random.rand(batch_size, seq_size, embed_dim)
+    transformer = Transformer(vocab_size, num_layers=2, d_model=embed_dim, num_heads=4)
+    transformer.train()
+    
+    print(transformer(Tensor(dummy_input), Tensor(dec_input)))
+    
+    
+    

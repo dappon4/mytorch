@@ -1,5 +1,5 @@
 import cupy as cp
-from Tensor import Tensor
+from mytorch.Tensor import Tensor
 
 def matmul(tensor1, tensor2):
     shape1 = tensor1.tensor.shape
