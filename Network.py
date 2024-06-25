@@ -1,16 +1,14 @@
 from mytorch.F.Activation import relu
-from mytorch.F.Evaluator import cross_entropy
-from mytorch.nn.Module import CompoundModule, Linear
 from mytorch.nn.Transformer import Transformer
-from mytorch.Util.Trainer import Trainer, load_mnist
 from mytorch.Tensor import Tensor
+import mytorch.nn as nn
 import cupy as cp
 
-class SimpleFeedForward(CompoundModule):
+class SimpleFeedForward(nn.CompoundModule):
     def __init__(self, input_size, hidden_size, output_size):
         super().__init__()
-        self.fc1 = Linear(input_size, hidden_size)
-        self.fc2 = Linear(hidden_size, output_size)
+        self.fc1 = nn.Linear(input_size, hidden_size)
+        self.fc2 = nn.Linear(hidden_size, output_size)
     
     def forward(self, x):
         x = self.fc1(x)
