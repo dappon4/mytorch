@@ -5,7 +5,7 @@ from mytorch.nn.Module import CompoundModule, Linear, LayerNorm, Module
 import cupy as cp
 
 # TODO: create mask for MHA
-# TODO: create embeddin model
+# TODO: create embedding model
 
 class PositionalEncoding(Module):
     def __init__(self, d_model):
@@ -154,8 +154,9 @@ class Decoder(CompoundModule):
 class Transformer(CompoundModule):
     def __init__(self, vocab_size, num_layers=6, d_model=512, num_heads=8, d_ff=2048):
         super().__init__()
-        self.positiolnal_encoder_encoder = PositionalEncoding(d_model)
-        self.positiolnal_encoder_decoder = PositionalEncoding(d_model)
+        
+        self.positiolnal_encoder_src = PositionalEncoding(d_model)
+        self.positiolnal_encoder_tgt = PositionalEncoding(d_model)
         
         self.encoder = Encoder(num_layers=num_layers, d_model=d_model, num_heads=num_heads, d_ff=d_ff)
         self.decoder = Decoder(num_layers=num_layers, d_model=d_model, num_heads=num_heads, d_ff=d_ff)
@@ -166,10 +167,10 @@ class Transformer(CompoundModule):
         self.output_linear = Linear(d_model, vocab_size)
         
     def forward(self, x, decoder_input):
-        x = self.positiolnal_encoder_encoder(x)
+        x = self.positiolnal_encoder_src(x)
         x = self.encoder(x)
 
-        decoder_input = self.positiolnal_encoder_decoder(decoder_input)
+        decoder_input = self.positiolnal_encoder_tgt(decoder_input)
         x = self.decoder(x, decoder_input)
         
         # lienar layer for output (d_model, vocab_size)
@@ -179,4 +180,7 @@ class Transformer(CompoundModule):
         return x
     
     def predict(self, x):
+        pass
+    
+    def get_mask(self, x):
         pass
