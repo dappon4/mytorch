@@ -8,4 +8,6 @@ build/
 
 *.ipynb
 test/
+test.*
 .env
+dataset/
