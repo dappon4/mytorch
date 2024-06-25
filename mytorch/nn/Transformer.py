@@ -1,10 +1,28 @@
-from mytorch.F.Activation import softmax
+from mytorch.F.Activation import softmax, relu
 from mytorch.F.Util import matmul
-from mytorch.nn.Module import CompoundModule, Linear, LayerNorm
+from mytorch.nn.Module import CompoundModule, Linear, LayerNorm, Module
 
 import cupy as cp
 
 # TODO: create mask for MHA
+# TODO: create embeddin model
+
+class PositionalEncoding(Module):
+    def __init__(self, d_model):
+        super().__init__()
+        self.d_model = d_model
+    
+    def forward(self, x):
+        seq_len = x.shape[1]
+        
+        denom = cp.power(10000, cp.repeat(cp.arange(self.d_model/2), 2)/ self.d_model)[cp.newaxis, cp.newaxis, ...]
+        num = cp.arange(seq_len)[cp.newaxis, ..., cp.newaxis]
+        
+        x[:,:,::2] += cp.sin((num/denom)[:,:,::2])
+        x[:,:,1::2] += cp.cos((num/denom)[:,:,1::2])
+        
+        return x
+        
 
 class MultiHeadAttention(CompoundModule):
     def __init__(self, d_model, num_heads):
@@ -20,7 +38,7 @@ class MultiHeadAttention(CompoundModule):
         V = V.reshape(batch_size, self.num_heads, seq_len, self.d_model//self.num_heads)
         
         QK = matmul(Q, K.transpose(0, 1, 3, 2)) / cp.sqrt(self.d_model//self.num_heads)
-        scaled = softmax(QK, axis=-2)
+        scaled = softmax(QK)
         
         x = matmul(scaled, V)
         x = x.reshape(batch_size, seq_len, self.d_model)
@@ -28,7 +46,7 @@ class MultiHeadAttention(CompoundModule):
         return x
 
 class EncoderLayer(CompoundModule):
-    def __init__(self, d_model, num_heads):
+    def __init__(self, d_model, num_heads, d_ff):
         super().__init__()
         self.num_heads = num_heads
     
@@ -40,7 +58,8 @@ class EncoderLayer(CompoundModule):
         self.fc_K = Linear(d_model, d_model)
         self.fc_V = Linear(d_model, d_model)
         
-        self.linear = Linear(d_model, d_model)
+        self.linear1 = Linear(d_model, d_ff)
+        self.linear2 = Linear(d_ff, d_model)
     
     def forward(self, x):
         x_res = x
@@ -54,14 +73,17 @@ class EncoderLayer(CompoundModule):
         
         x_res = x
         x = self.linear(x)
+        x = relu(x)
+        x = self.linear2(x)
+        
         x = self.layernorm2(x + x_res)
         
         return x
 
 class Encoder(CompoundModule):
-    def __init__(self, num_layers=6, d_model=512, num_heads=8):
+    def __init__(self, num_layers, d_model, num_heads, d_ff):
         super().__init__()
-        self.layers = [EncoderLayer(d_model, num_heads) for _ in range(num_layers)]
+        self.layers = [EncoderLayer(d_model, num_heads, d_ff) for _ in range(num_layers)]
     
     def forward(self, x):
         for layer in self.layers:
@@ -69,7 +91,7 @@ class Encoder(CompoundModule):
         return x
 
 class DecoderLayer(CompoundModule):
-    def __init__(self, d_model, num_heads):
+    def __init__(self, d_model, num_heads, d_ff):
         super().__init__()
         self.fc_Q_1 = Linear(d_model, d_model)
         self.fc_K_1 = Linear(d_model, d_model)
@@ -79,7 +101,8 @@ class DecoderLayer(CompoundModule):
         self.fc_K_2 = Linear(d_model, d_model)
         self.fc_V_2 = Linear(d_model, d_model)
         
-        self.linear = Linear(d_model, d_model)
+        self.linear1 = Linear(d_model, d_ff)
+        self.lienar2 = Linear(d_ff, d_model)
         
         self.layernorm1 = LayerNorm()
         self.layernorm2 = LayerNorm()
@@ -107,7 +130,10 @@ class DecoderLayer(CompoundModule):
         x = self.layernorm2(x + x_res)
         
         x_res = x
-        x = self.linear(x)
+        
+        x = self.linear1(x)
+        x = relu(x)
+        x = self.lienar2(x)
         
         x = self.layernorm3(x + x_res)
         
@@ -115,9 +141,9 @@ class DecoderLayer(CompoundModule):
         
 
 class Decoder(CompoundModule):
-    def __init__(self, num_layers=6, d_model=512, num_heads=8):
+    def __init__(self, num_layers, d_model, num_heads, d_ff):
         super().__init__()
-        self.layers = [DecoderLayer(d_model, num_heads) for _ in range(num_layers)]
+        self.layers = [DecoderLayer(d_model, num_heads, d_ff) for _ in range(num_layers)]
     
     def forward(self, x, decoder_input):
         encoder_output = x
@@ -126,10 +152,13 @@ class Decoder(CompoundModule):
         return decoder_input
 
 class Transformer(CompoundModule):
-    def __init__(self, vocab_size, num_layers=6, d_model=512, num_heads=8):
+    def __init__(self, vocab_size, num_layers=6, d_model=512, num_heads=8, d_ff=2048):
         super().__init__()
-        self.encoder = Encoder(num_layers=num_layers, d_model=d_model, num_heads=num_heads)
-        self.decoder = Decoder(num_layers=num_layers, d_model=d_model, num_heads=num_heads)
+        self.positiolnal_encoder_encoder = PositionalEncoding(d_model)
+        self.positiolnal_encoder_decoder = PositionalEncoding(d_model)
+        
+        self.encoder = Encoder(num_layers=num_layers, d_model=d_model, num_heads=num_heads, d_ff=d_ff)
+        self.decoder = Decoder(num_layers=num_layers, d_model=d_model, num_heads=num_heads, d_ff=d_ff)
         
         self.fc_encoder_K = Linear(512, 512)
         self.fc_encoder_V = Linear(512, 512)
@@ -137,8 +166,10 @@ class Transformer(CompoundModule):
         self.output_linear = Linear(d_model, vocab_size)
         
     def forward(self, x, decoder_input):
+        x = self.positiolnal_encoder_encoder(x)
         x = self.encoder(x)
 
+        decoder_input = self.positiolnal_encoder_decoder(decoder_input)
         x = self.decoder(x, decoder_input)
         
         # lienar layer for output (d_model, vocab_size)
