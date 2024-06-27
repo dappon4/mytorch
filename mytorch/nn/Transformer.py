@@ -1,6 +1,6 @@
 from mytorch.F.Activation import relu, softmax
 from mytorch.F.Util import matmul
-from mytorch.nn import CompoundModule, Linear, LayerNorm, Module
+from mytorch.nn import CompoundModule, Linear, LayerNorm, Module, Embedding
 
 import cupy as cp
 
@@ -152,8 +152,15 @@ class Decoder(CompoundModule):
         return decoder_input
 
 class Transformer(CompoundModule):
-    def __init__(self, vocab_size, num_layers=6, d_model=512, num_heads=8, d_ff=2048):
+    def __init__(self, src_vocab_size, tgt_vocab_size, num_layers=6, d_model=512, num_heads=8, d_ff=2048):
         super().__init__()
+        
+        self.src_vocab_size = src_vocab_size
+        self.tgt_vocab_size = tgt_vocab_size
+        
+        # TODO: create embedding layer
+        self.src_embedding = Embedding(src_vocab_size, d_model)
+        self.tgt_embedding = Embedding(tgt_vocab_size, d_model)
         
         self.positiolnal_encoder_src = PositionalEncoding(d_model)
         self.positiolnal_encoder_tgt = PositionalEncoding(d_model)
@@ -164,12 +171,15 @@ class Transformer(CompoundModule):
         self.fc_encoder_K = Linear(512, 512)
         self.fc_encoder_V = Linear(512, 512)
         
-        self.output_linear = Linear(d_model, vocab_size)
+        self.output_linear = Linear(d_model, tgt_vocab_size)
         
-    def forward(self, x, decoder_input):
+    def forward(self, encoder_input, decoder_input):
+        
+        x = self.src_embedding(encoder_input)
         x = self.positiolnal_encoder_src(x)
         x = self.encoder(x)
 
+        decoder_input = self.tgt_embedding(decoder_input)
         decoder_input = self.positiolnal_encoder_tgt(decoder_input)
         x = self.decoder(x, decoder_input)
         

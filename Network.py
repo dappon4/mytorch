@@ -11,7 +11,7 @@ if __name__ == "__main__":
     d_ff = 2048
     dummy_input = cp.random.rand(batch_size, seq_size, embed_dim)
     dec_input = cp.random.rand(batch_size, seq_size, embed_dim)
-    transformer = Transformer(vocab_size, num_layers=2, d_model=embed_dim, num_heads=8, d_ff=d_ff)
+    transformer = Transformer(vocab_size, vocab_size, num_layers=2, d_model=embed_dim, num_heads=8, d_ff=d_ff)
     transformer.train()
     
     res = transformer(Tensor(dummy_input), Tensor(dec_input))
