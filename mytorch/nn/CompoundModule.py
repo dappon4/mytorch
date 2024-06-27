@@ -5,7 +5,7 @@ class CompoundModule(Module):
         super().__init__()
     
     def __call__(self, tensor, *args):
-        self.error_grad = lambda x: x
+
         tensor = self.forward(tensor, *args)
         
         return tensor

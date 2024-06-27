@@ -49,7 +49,6 @@ class Conv2d(Module):
         return cp.tensordot(flattened, flattened_filter, axes=([1,3], [1,3])).transpose(0,2,1,3).reshape(batch_size, self.out_channels, output_h, output_w) + self.bias
     
     def backward_calc(self, error, lr):
-        error = self.error_grad(error)
         
         # error is cp array of shape (batch_size, out_channels, new_height, new_width)
         batch_size = self.padded_input.shape[0]

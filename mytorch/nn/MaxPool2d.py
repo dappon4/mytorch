@@ -37,7 +37,7 @@ class MaxPool2d(Module):
         return cp.max(flattened, axis = -1).reshape(batch_size, channel_size, output_h, output_w)
 
     def backward_calc(self, error, lr):
-        error = self.error_grad(error)
+
         batch_size, channel_size = error.shape[:2]
         max_sparse = cp.eye(self.kernel_h * self.kernel_w)[self.max_indices]
         flattened_error = error.reshape(batch_size, channel_size, -1, 1)

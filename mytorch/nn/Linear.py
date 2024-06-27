@@ -20,7 +20,6 @@ class Linear(Module):
         return x
 
     def backward_calc(self, error, lr):
-        error = self.error_grad(error)
 
         delta_weight = cp.einsum("ij,ik->ijk", self.input, error)
         delta_error = cp.matmul(self.weight, error.T)
