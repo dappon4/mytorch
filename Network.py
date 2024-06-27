@@ -9,13 +9,13 @@ if __name__ == "__main__":
     seq_size = 128
     embed_dim = 256
     d_ff = 2048
-    dummy_input = cp.random.rand(batch_size, seq_size, embed_dim)
-    dec_input = cp.random.rand(batch_size, seq_size, embed_dim)
-    transformer = Transformer(vocab_size, vocab_size, num_layers=2, d_model=embed_dim, num_heads=8, d_ff=d_ff)
+    dummy_input = cp.random.randint(0, vocab_size-1, (batch_size, seq_size))
+    dec_input = cp.random.randint(0, vocab_size-1, (batch_size, seq_size))
+    transformer = Transformer(vocab_size, vocab_size, num_layers=1, d_model=embed_dim, num_heads=8, d_ff=d_ff)
     transformer.train()
     
     res = transformer(Tensor(dummy_input), Tensor(dec_input))
-    print(res)
+    print(res.tensor.dtype)
     print(res.shape)
     
     

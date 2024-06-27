@@ -16,7 +16,7 @@ class Embedding(Module):
     
     def backward_calc(self, error, lr):
         # TODO: maybe find a better way to do this
-        one_hot_T = cp.eye(self.vocab_size)[self.input].transpose(0,2,1)
+        one_hot_T = cp.eye(self.vocab_size, dtype=cp.float32)[self.input].transpose(0,2,1)
         delta_weight = cp.matmul(one_hot_T, error)
         delta_error = cp.matmul(error, self.weight.T)
         

@@ -35,10 +35,10 @@ class Conv2d(Module):
         output_w = (x.shape[3] - self.kernel_w + 2 * self.padding)//self.stride_w + 1
         
         if self.bias is None:
-            self.bias = cp.zeros((1, self.out_channels, output_h, output_w))
+            self.bias = cp.zeros((1, self.out_channels, output_h, output_w), dtype=cp.float32)
         
         self.window_i = cp.repeat(cp.arange(self.kernel_h), self.kernel_w).reshape(1,-1) + (cp.repeat(cp.arange(output_h), output_w)*self.stride_h).reshape(-1,1)
-        self.window_j = cp.tile(cp.arange(self.kernel_w),self.kernel_h).reshape(1,-1) + (cp.tile(cp.arange(output_w),output_h)*self.stride_w).reshape(-1,1)
+        self.window_j = cp.tile(cp.arange(self.kernel_w, dtype=cp.float32),self.kernel_h).reshape(1,-1) + (cp.tile(cp.arange(output_w, dtype=cp.float32),output_h)*self.stride_w).reshape(-1,1)
 
         self.padded_input = cp.pad(x, ((0,0), (0,0), (self.padding, self.padding), (self.padding, self.padding)))
         
@@ -58,7 +58,7 @@ class Conv2d(Module):
         
         filter_i = cp.tile(self.window_i, self.in_channels)
         filter_j = cp.tile(self.window_j, self.in_channels)
-        filter_c = cp.repeat(cp.repeat(cp.arange(self.in_channels), self.kernel_h*self.kernel_w).reshape(1,-1), error_size, axis=0)
+        filter_c = cp.repeat(cp.repeat(cp.arange(self.in_channels, dtype=cp.float32), self.kernel_h*self.kernel_w).reshape(1,-1), error_size, axis=0)
         
         sub_matrices = self.padded_input[:,filter_c,filter_i,filter_j]
         sub_matrices = cp.expand_dims(sub_matrices, axis = 1)
@@ -66,7 +66,7 @@ class Conv2d(Module):
         flattened_error = error.reshape(batch_size, self.out_channels, -1)
         flattened_error = cp.expand_dims(flattened_error, axis = -1)
         
-        delta_filter = cp.sum(sub_matrices * flattened_error,axis = 2).reshape(batch_size, self.out_channels, self.in_channels, self.kernel_h, self.kernel_w)
+        delta_filter = cp.sum(sub_matrices * flattened_error,axis = 2, dtype=cp.float32).reshape(batch_size, self.out_channels, self.in_channels, self.kernel_h, self.kernel_w)
         
         # calculate delta_error
         flattened_filter = self.filter.reshape(self.out_channels, self.in_channels, 1, -1)
@@ -74,16 +74,16 @@ class Conv2d(Module):
 
         flattened_error = cp.expand_dims(flattened_error, axis = 2)
 
-        delta_error = cp.sum(flattened_error * flattened_filter, axis = 1)
+        delta_error = cp.sum(flattened_error * flattened_filter, axis = 1, dtype=cp.float32)
 
-        delta_error_base = cp.zeros_like(self.padded_input, dtype=cp.float64)
+        delta_error_base = cp.zeros_like(self.padded_input, dtype=cp.float32)
 
         cp.add.at(delta_error_base, (slice(None), slice(None), self.window_i, self.window_j), delta_error)
         
         if self.padding > 0:
             delta_error_base = delta_error_base[:,:,self.padding:-self.padding,self.padding:-self.padding]
         
-        self.filter -= lr * cp.mean(delta_filter, axis=0)
-        self.bias -= lr * cp.mean(error, axis = 0)
+        self.filter -= lr * cp.mean(delta_filter, axis=0, dtype=cp.float32)
+        self.bias -= lr * cp.mean(error, axis = 0, dtype=cp.float32)
         
         return delta_error_base

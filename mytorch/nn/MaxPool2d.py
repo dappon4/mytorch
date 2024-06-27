@@ -25,8 +25,8 @@ class MaxPool2d(Module):
         output_h = (x.shape[2] - self.kernel_h + 2 * self.padding)//self.stride_h + 1
         output_w = (x.shape[3] - self.kernel_w + 2 * self.padding)//self.stride_w + 1
         
-        self.window_i = cp.repeat(cp.arange(self.kernel_h), self.kernel_w).reshape(1,-1) + (cp.repeat(cp.arange(output_h), output_w)*self.stride_h).reshape(-1,1)
-        self.window_j = cp.tile(cp.arange(self.kernel_w),self.kernel_h).reshape(1,-1) + (cp.tile(cp.arange(output_w),output_h)*self.stride_w).reshape(-1,1)
+        self.window_i = cp.repeat(cp.arange(self.kernel_h, dtype=cp.float32), self.kernel_w).reshape(1,-1) + (cp.repeat(cp.arange(output_h, dtype=cp.float32), output_w)*self.stride_h).reshape(-1,1)
+        self.window_j = cp.tile(cp.arange(self.kernel_w, dtype=cp.float32),self.kernel_h).reshape(1,-1) + (cp.tile(cp.arange(output_w, dtype=cp.float32),output_h)*self.stride_w).reshape(-1,1)
 
         self.padded_input = cp.pad(x, ((0,0), (0,0), (self.padding, self.padding), (self.padding, self.padding)))
         
@@ -34,7 +34,7 @@ class MaxPool2d(Module):
         self.flattened = flattened
         self.max_indices = cp.argmax(flattened, axis = -1)
         
-        return cp.max(flattened, axis = -1).reshape(batch_size, channel_size, output_h, output_w)
+        return cp.max(flattened, axis = -1, dtype=cp.float32).reshape(batch_size, channel_size, output_h, output_w)
 
     def backward_calc(self, error, lr):
 
@@ -43,7 +43,7 @@ class MaxPool2d(Module):
         flattened_error = error.reshape(batch_size, channel_size, -1, 1)
         max_vals = max_sparse * flattened_error
         
-        delta_error = cp.zeros(self.padded_input.shape)
+        delta_error = cp.zeros(self.padded_input.shape, dtype=cp.float32)
         cp.add.at(delta_error, (slice(None), slice(None), self.window_i, self.window_j), max_vals)
         
         if self.padding > 0:

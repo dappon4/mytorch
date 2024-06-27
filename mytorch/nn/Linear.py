@@ -1,13 +1,12 @@
 from mytorch.F.Initializer import xavier_init
 from mytorch.nn.Module import Module
-
 import cupy as cp
 
 class Linear(Module):
     def __init__(self, input_size, output_size):
         super().__init__()
         self.weight = xavier_init(input_size, output_size)
-        self.bias = cp.zeros((output_size,))
+        self.bias = cp.zeros((output_size,), dtype=cp.float32)
     
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}(input_size={self.weight.shape[0]}, output_size={self.weight.shape[1]})"

@@ -37,7 +37,8 @@ class MultiHeadAttention(CompoundModule):
         K = K.reshape(batch_size, self.num_heads, seq_len, self.d_model//self.num_heads)
         V = V.reshape(batch_size, self.num_heads, seq_len, self.d_model//self.num_heads)
         
-        QK = matmul(Q, K.transpose(0, 1, 3, 2)) / cp.sqrt(self.d_model//self.num_heads)
+        QK = matmul(Q, K.transpose(0, 1, 3, 2)) / cp.sqrt(self.d_model//self.num_heads, dtype=cp.float32)
+        
         scaled = softmax(QK)
         
         x = matmul(scaled, V)
@@ -77,7 +78,7 @@ class EncoderLayer(CompoundModule):
         x = self.linear2(x)
         
         x = self.layernorm2(x + x_res)
-        
+
         return x
 
 class Encoder(CompoundModule):
@@ -158,7 +159,6 @@ class Transformer(CompoundModule):
         self.src_vocab_size = src_vocab_size
         self.tgt_vocab_size = tgt_vocab_size
         
-        # TODO: create embedding layer
         self.src_embedding = Embedding(src_vocab_size, d_model)
         self.tgt_embedding = Embedding(tgt_vocab_size, d_model)
         

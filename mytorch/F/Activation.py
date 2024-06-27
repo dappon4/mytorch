@@ -6,7 +6,7 @@ from mytorch.Tensor import Tensor
 def relu(tensor):
     fil = cp.where(tensor.tensor > 0, 1, 0)
 
-    return Tensor(tensor.tensor * fil, {Intermediate(tensor.prev, relu_backward(fil))})
+    return Tensor((tensor.tensor * fil).astype(cp.float32), {Intermediate(tensor.prev, relu_backward(fil))})
 
 def sigmoid(tensor):
     out = 1/(1+cp.exp(-tensor.tensor))
