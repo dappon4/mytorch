@@ -1,26 +1,21 @@
 import cupy as cp
+from mytorch.nn import Intermediate
+from mytorch.F.Gradient import relu_backward, sigmoid_backward, softmax_backward
+from mytorch.Tensor import Tensor
 
 def relu(tensor):
     fil = cp.where(tensor.tensor > 0, 1, 0)
-    for prev in tensor.prev:
 
-        f = prev.error_grad
-        prev.error_grad = lambda x: f(x * fil)
-
-    tensor.tensor *= fil
-    return tensor
+    return Tensor(tensor.tensor * fil, Intermediate(tensor.prev, relu_backward(fil)))
 
 def sigmoid(tensor):
-    tensor.tensor = 1/(1+cp.exp(-tensor.tensor))
-    for prev in tensor.prev:
-        f = prev.error_grad
-        prev.error_grad = lambda x: f(x * tensor.tensor * (1 - tensor.tensor))
-    
-    return tensor
+    out = 1/(1+cp.exp(-tensor.tensor))
+
+    return Tensor(out, Intermediate(tensor.prev, sigmoid_backward(out)))
 
 def softmax(tensor, axis=-1):
-    x = tensor.tensor
+    x = tensor.tensor.copy()
     x = cp.exp(x - cp.max(x, axis=axis, keepdims=True))
     tensor.tensor = x / cp.sum(x, axis=-axis, keepdims=True)
     
-    return tensor
+    return Tensor(x / cp.sum(x, axis=-axis, keepdims=True), softmax_backward())

@@ -1,6 +1,4 @@
-from mytorch.F.Initializer import he_init_conv2d, xavier_init
 from mytorch.Tensor import Tensor
-import cupy as cp
 
 class Module:
     def __init__(self):

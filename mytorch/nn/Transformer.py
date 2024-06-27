@@ -1,6 +1,6 @@
 from mytorch.F.Activation import softmax, relu
 from mytorch.F.Util import matmul
-from mytorch.nn.Module import CompoundModule, Linear, LayerNorm, Module
+from mytorch.nn import CompoundModule, Linear, LayerNorm, Module
 
 import cupy as cp
 
@@ -72,7 +72,7 @@ class EncoderLayer(CompoundModule):
         x = self.layernorm1(x + x_res)
         
         x_res = x
-        x = self.linear(x)
+        x = self.linear1(x)
         x = relu(x)
         x = self.linear2(x)
         
