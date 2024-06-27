@@ -20,23 +20,23 @@ class Tensor():
     
     def __mul__(self, num):
 
-        return Tensor(num * self.tensor, Intermediate(self.prev, mul_backward(num)))
+        return Tensor(num * self.tensor, {Intermediate(self.prev, mul_backward(num))})
     
     def __rmul__(self, num):
         return self.__mul__(num)
     
     def __truediv__(self, num):
 
-        return Tensor(self.tensor/num, Intermediate(self.prev, div_backward(num)))
+        return Tensor(self.tensor/num, {Intermediate(self.prev, div_backward(num))})
     
-    def transpose(self, *dimension):
+    def transpose(self, *axis):
 
-        return Tensor(self.tensor.transpose(*dimension), Intermediate(self.prev, transpose_backward(dimension)))
+        return Tensor(self.tensor.transpose(*axis), {Intermediate(self.prev, transpose_backward(*axis))})
     
     def reshape(self, *shape):
         curr_shape = self.tensor.shape
 
-        return Tensor(self.tensor.reshape(*shape), Intermediate(self.prev, reshape_backward(curr_shape)))
+        return Tensor(self.tensor.reshape(*shape), {Intermediate(self.prev, reshape_backward(curr_shape))})
 
 if __name__ == "__main__":
     t1 = Tensor(cp.ones(3))

@@ -6,20 +6,20 @@ def mul_backward(num):
 def div_backward(num):
     return lambda x: x/num
 
-def transpose_backward(dimension):
-    counter_index = [0]*len(dimension)
-    for i, dim in enumerate(dimension):
+def transpose_backward(*axis):
+    counter_index = [0]*len(axis)
+    for i, dim in enumerate(axis):
         counter_index[dim] = i
     
     counter_index = tuple(counter_index)
     return lambda x: x.transpose(*counter_index)
 
 def matmul_backward(tensor1, tensor2):
-    shape1 = tensor1.tensor.shape
-    shape2 = tensor2.tensor.shape
+    trasnpose_index = list(range(len(tensor1.shape)))
+    trasnpose_index[-1], trasnpose_index[-2] = trasnpose_index[-2], trasnpose_index[-1]
     
-    tensor1_T = tensor1.transpose(shape1[:-2], shape1[-1], shape1[-2])
-    tensor2_T = tensor2.transpose(shape2[:-2], shape2[-1], shape2[-2])
+    tensor1_T = tensor1.transpose(*trasnpose_index)
+    tensor2_T = tensor2.transpose(*trasnpose_index)
     
     return lambda x: (cp.matmul(x, tensor2_T), cp.matmul(tensor1_T, x))
 

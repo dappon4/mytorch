@@ -1,4 +1,4 @@
-from mytorch.F.Activation import softmax, relu
+from mytorch.F.Activation import relu, softmax
 from mytorch.F.Util import matmul
 from mytorch.nn import CompoundModule, Linear, LayerNorm, Module
 

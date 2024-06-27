@@ -35,7 +35,6 @@ class LayerNorm(Module):
         delta_gamma = cp.sum(error * self.y, axis=-1)
         delta_beta = cp.sum(error, axis=-1)
         
-        # TODO: verify if this is True
         self.gamma -= lr * cp.mean(delta_gamma, axis=0)
         self.beta -= lr * cp.mean(delta_beta, axis=0)
         

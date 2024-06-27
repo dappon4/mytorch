@@ -1,4 +1,3 @@
-from mytorch.F.Activation import relu
 from mytorch.nn.Transformer import Transformer, PositionalEncoding
 from mytorch.Tensor import Tensor
 import mytorch.nn as nn
