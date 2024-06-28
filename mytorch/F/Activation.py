@@ -18,4 +18,4 @@ def softmax(tensor, axis=-1):
     x = cp.exp(x - cp.max(x, axis=axis, keepdims=True))
     tensor.tensor = x / cp.sum(x, axis=-axis, keepdims=True)
     
-    return Tensor(x / cp.sum(x, axis=-axis, keepdims=True), {softmax_backward()})
+    return Tensor(x / cp.sum(x, axis=-axis, keepdims=True), {Intermediate(tensor.prev, softmax_backward())})

@@ -6,24 +6,30 @@ class Linear(Module):
     def __init__(self, input_size, output_size):
         super().__init__()
         self.weight = xavier_init(input_size, output_size)
-        self.bias = cp.zeros((output_size,), dtype=cp.float32)
+        self.bias = None
+        self.input = None
     
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}(input_size={self.weight.shape[0]}, output_size={self.weight.shape[1]})"
     
     def forward(self, x):
-        # x is cp array
         self.input = x
-
-        x = cp.matmul(x, self.weight) + self.bias
+        x = cp.matmul(x, self.weight)
+        
+        if self.bias is None:
+            self.bias = cp.zeros(x.shape[1:], dtype=cp.float32)
+        
+        x += self.bias
         return x
 
     def backward_calc(self, error, lr):
-
-        delta_weight = cp.einsum("ij,ik->ijk", self.input, error)
-        delta_error = cp.matmul(self.weight, error.T)
+        input_T_axis = list(range(len(self.input.shape)))
+        input_T = self.input.transpose(*input_T_axis[:-2], input_T_axis[-1], input_T_axis[-2])
+        
+        delta_weight = cp.matmul(input_T, error)
+        delta_error = cp.matmul(error, self.weight.T)
         
         self.weight -= lr * cp.mean(delta_weight, axis = 0)
         self.bias -= lr * cp.mean(error, axis=0)
         
-        return delta_error.T  
+        return delta_error

@@ -20,6 +20,19 @@ class Embedding(Module):
         delta_weight = cp.matmul(one_hot_T, error)
         delta_error = cp.matmul(error, self.weight.T)
         
-        self.weight -= lr * delta_weight
+        self.weight -= lr * cp.mean(delta_weight, axis=0)
         
         return delta_error
+    
+    def get_padding_mask(self):
+        mask_base = (self.input==0)[..., cp.newaxis]
+        half_mask = cp.repeat(mask_base, self.input.shape[1], axis=-1)
+        half_mask_T = cp.moveaxis(half_mask, -1, -2)
+        full_mask = half_mask | half_mask_T
+        
+        return cp.expand_dims(full_mask*(-cp.inf), 1)
+    
+    def get_causal_mask(self):
+        seq_len = self.input.shape[1]
+        mask = cp.triu(cp.ones((seq_len, seq_len)), 1)
+        return (mask * -cp.inf)[cp.newaxis, cp.newaxis, ...]

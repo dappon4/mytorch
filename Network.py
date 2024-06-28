@@ -15,7 +15,11 @@ if __name__ == "__main__":
     transformer.train()
     
     res = transformer(Tensor(dummy_input), Tensor(dec_input))
-    print(res.tensor.dtype)
+    final_layer = res.prev
     print(res.shape)
+    error = cp.random.rand(*res.shape)
+    
+    for prev in final_layer: break
+    prev.backward(error, 0.005)
     
     

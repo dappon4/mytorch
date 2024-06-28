@@ -16,7 +16,10 @@ class Tensor():
         return f"Tensor({self.tensor}, previous={self.prev})"
     
     def __add__(self, other):
-        return Tensor(self.tensor + other.tensor, self.prev.union(other.prev))
+        if type(other) == Tensor:
+            return Tensor(self.tensor + other.tensor, self.prev.union(other.prev))
+        else:
+            return Tensor(self.tensor + other, self.prev)
     
     def __mul__(self, num):
 

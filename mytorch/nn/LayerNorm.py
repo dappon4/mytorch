@@ -30,13 +30,13 @@ class LayerNorm(Module):
     
     def backward_calc(self, error, lr):
         jacobian = self.calculate_jacobian()
-        delta_error = cp.matmul(error, jacobian).reshape(self.original_shape)
+        delta_error = cp.matmul(cp.expand_dims(error,-2), jacobian).reshape(self.original_shape)
         
         delta_gamma = cp.sum(error * self.y, axis=-1, dtype=cp.float32)
         delta_beta = cp.sum(error, axis=-1, dtype=cp.float32)
-        
-        self.gamma -= lr * cp.mean(delta_gamma, axis=0, dtype=cp.float32)
-        self.beta -= lr * cp.mean(delta_beta, axis=0, dtype=cp.float32)
+
+        self.gamma -= lr * cp.mean(delta_gamma, axis=0, dtype=cp.float32)[...,cp.newaxis]
+        self.beta -= lr * cp.mean(delta_beta, axis=0, dtype=cp.float32)[...,cp.newaxis]
         
         return delta_error
     
