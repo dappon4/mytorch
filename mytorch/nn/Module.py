@@ -1,4 +1,6 @@
 from mytorch.Tensor import Tensor
+import os
+import pickle
 
 class Module:
     def __init__(self):
@@ -38,3 +40,15 @@ class Module:
         self.training = False
         for prev in self.prev:
             prev.eval()
+    
+    def save(self, path):
+        directory = os.path.dirname(path)
+        
+        if not os.path.exists(directory):
+            os.makedirs(directory)
+        
+        output = open(path, 'wb')
+        pickle.dump(self, output)
+        
+        output.close()
+        
