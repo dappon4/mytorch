@@ -1,5 +1,6 @@
 from mytorch.nn.Module import Module
 import cupy as cp
+import time
 
 class LayerNorm(Module):
     def __init__(self, axis=-1):

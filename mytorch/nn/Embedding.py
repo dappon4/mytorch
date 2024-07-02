@@ -2,6 +2,15 @@ from mytorch.nn import Module
 from mytorch.F.Initializer import xavier_init
 import cupy as cp
 
+def one_hot_encode(x, vocab_size):
+    rows = cp.arange(x.shape[0])[:, cp.newaxis]
+    cols = cp.arange(x.shape[1])
+    
+    one_hot_matrix = cp.zeros((x.shape[0], x.shape[1], vocab_size), dtype=int)
+    one_hot_matrix[rows, cols, x] = 1
+    
+    return one_hot_matrix
+
 class Embedding(Module):
     def __init__(self, vocab_size, embed_dim):
         super().__init__()
@@ -12,11 +21,12 @@ class Embedding(Module):
     
     def forward(self, x):
         self.input = x
-        return cp.take(self.weight, x, axis=0)
+        #return cp.take(self.weight, x, axis=0)
+        return self.weight[x]
     
     def backward_calc(self, error, lr):
         # TODO: maybe find a better way to do this
-        one_hot_T = cp.eye(self.vocab_size, dtype=cp.float32)[self.input].transpose(0,2,1)
+        one_hot_T = one_hot_encode(self.input, self.vocab_size).transpose(0,2,1)
         delta_weight = cp.matmul(one_hot_T, error)
         delta_error = cp.matmul(error, self.weight.T)
         

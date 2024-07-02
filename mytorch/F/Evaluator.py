@@ -17,7 +17,7 @@ def mean_squared_error(y_pred_tensor, y_true):
     
     return Loss(value, gradient, y_pred_tensor.prev)
 
-def cross_entropy(y_pred_tensor, y_true):
+def cross_entropy(y_pred_tensor, y_true, mask=1):
     # cross entropy and softmax all together
     #y_pred = softmax(y_pred)
     y_pred = y_pred_tensor.tensor
@@ -26,6 +26,6 @@ def cross_entropy(y_pred_tensor, y_true):
     y_pred = y_pred / cp.sum(y_pred, axis=-1, keepdims=True)
     
     value = (-cp.sum(y_true * cp.log(y_pred)) / len(y_pred)).item()
-    gradient = y_pred - y_true
+    gradient = (y_pred - y_true) * mask
     
     return Loss(value, gradient, y_pred_tensor.prev)

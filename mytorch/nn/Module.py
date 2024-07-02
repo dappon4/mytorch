@@ -11,7 +11,6 @@ class Module:
         return f"{self.__class__.__name__}()"
         
     def __call__(self, tensor, *args):
-
         self.prev = tensor.prev.copy()
         return Tensor(self.forward(tensor.tensor.copy(), *args), {self})
     

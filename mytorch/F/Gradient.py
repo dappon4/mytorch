@@ -40,3 +40,6 @@ def sigmoid_backward(output):
 
 def softmax_backward():
     return lambda x: x
+
+def tanh_backward(output):
+    return lambda x: x * (1 - output**2)
