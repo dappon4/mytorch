@@ -23,13 +23,14 @@ class Linear(Module):
         return x
 
     def backward_calc(self, error, lr):
-        input_T_axis = list(range(len(self.input.shape)))
-        input_T = self.input.transpose(*input_T_axis[:-2], input_T_axis[-1], input_T_axis[-2])
-        
-        delta_weight = cp.matmul(input_T, error)
+        # TODO: fix this
+        inp = self.input
+        inp = inp.reshape(inp.shape[0],-1,inp.shape[-1])
+        input_T = cp.moveaxis(inp, -1, -2)
+
+        delta_weight = cp.matmul(input_T, error.reshape(error.shape[0],-1,error.shape[-1]))
         delta_error = cp.matmul(error, self.weight.T)
-        
         self.weight -= lr * cp.mean(delta_weight, axis = 0)
-        self.bias -= lr * cp.mean(error, axis=0)
-        
+        self.bias -= lr * cp.mean(error.squeeze(), axis=0)
+
         return delta_error

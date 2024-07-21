@@ -38,13 +38,12 @@ class Conv2d(Module):
             self.bias = cp.zeros((1, self.out_channels, output_h, output_w), dtype=cp.float32)
         
         self.window_i = cp.repeat(cp.arange(self.kernel_h), self.kernel_w).reshape(1,-1) + (cp.repeat(cp.arange(output_h), output_w)*self.stride_h).reshape(-1,1)
-        self.window_j = cp.tile(cp.arange(self.kernel_w, dtype=cp.float32),self.kernel_h).reshape(1,-1) + (cp.tile(cp.arange(output_w, dtype=cp.float32),output_h)*self.stride_w).reshape(-1,1)
+        self.window_j = cp.tile(cp.arange(self.kernel_w),self.kernel_h).reshape(1,-1) + (cp.tile(cp.arange(output_w),output_h)*self.stride_w).reshape(-1,1)
 
         self.padded_input = cp.pad(x, ((0,0), (0,0), (self.padding, self.padding), (self.padding, self.padding)))
         
         flattened = self.padded_input[:,:,self.window_i,self.window_j]
         flattened_filter = self.filter.reshape((self.out_channels, self.in_channels, 1, self.kernel_h*self.kernel_w))
-        
         # maybe optimze this
         return cp.tensordot(flattened, flattened_filter, axes=([1,3], [1,3])).transpose(0,2,1,3).reshape(batch_size, self.out_channels, output_h, output_w) + self.bias
     
@@ -58,7 +57,7 @@ class Conv2d(Module):
         
         filter_i = cp.tile(self.window_i, self.in_channels)
         filter_j = cp.tile(self.window_j, self.in_channels)
-        filter_c = cp.repeat(cp.repeat(cp.arange(self.in_channels, dtype=cp.float32), self.kernel_h*self.kernel_w).reshape(1,-1), error_size, axis=0)
+        filter_c = cp.repeat(cp.repeat(cp.arange(self.in_channels), self.kernel_h*self.kernel_w).reshape(1,-1), error_size, axis=0)
         
         sub_matrices = self.padded_input[:,filter_c,filter_i,filter_j]
         sub_matrices = cp.expand_dims(sub_matrices, axis = 1)
